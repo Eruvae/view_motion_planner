@@ -19,12 +19,12 @@ int main(int argc, char **argv)
     nhp.setParam("tree_resolution", 0.01);
 
   std::string wstree_default_package = ros::package::getPath("ur_with_cam_gazebo");
-  std::string wstree_file = nhp.param<std::string>("workspace_tree", wstree_default_package + "/workspace_trees/static/workspace_map.ot");
-  std::string sampling_tree_file = nhp.param<std::string>("sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
-  std::string map_frame = nhp.param<std::string>("map_frame", "world");
-  std::string ws_frame = nhp.param<std::string>("ws_frame", "arm_base_link");
-  bool update_planning_tree = nhp.param<bool>("update_planning_tree", true);
-  bool initialize_evaluator = nhp.param<bool>("initialize_evaluator", true);
+  std::string wstree_file = nh.param<std::string>("/roi_viewpoint_planner/workspace_tree", wstree_default_package + "/workspace_trees/static/workspace_map.ot");
+  std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
+  std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
+  std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
+  bool update_planning_tree = nh.param<bool>("/roi_viewpoint_planner/update_planning_tree", true);
+  bool initialize_evaluator = nh.param<bool>("/roi_viewpoint_planner/initialize_evaluator", true);
 
   bool evaluate_results = nhp.param<bool>("evaluate_results", false);
 
@@ -32,4 +32,5 @@ int main(int argc, char **argv)
   tf2_ros::TransformListener tfListener(tfBuffer);
 
   ViewMotionPlanner planner(nh, tfBuffer, map_frame, tree_resolution, evaluate_results);
+  planner.plannerLoop();
 }

@@ -11,6 +11,7 @@
 #include "octomap_vpp/roioctree_utils.h"
 #include <roi_viewpoint_planner/gt_octree_loader.h>
 #include <roi_viewpoint_planner/evaluator.h>
+#include "view_motion_planner/vmp_utils.h"
 
 namespace view_motion_planner
 {
@@ -27,9 +28,13 @@ private:
   boost::mutex &tree_mtx;
   const std::string map_frame;
   ros::Publisher octomapPub;
+  ros::Publisher observationRegionsPub;
+  ros::Publisher observatonPointsPub;
   ros::Subscriber roiSub;
   size_t old_rois;
   octomap::KeySet encountered_keys;
+
+  const std::vector<octomath::Vector3> sphere_vecs = getFibonacciSphereVectors(1000);
 
   // Evaluator variables
   size_t eval_trial_num;
@@ -45,9 +50,7 @@ private:
 
   void registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event);
 
-  octomap::KeySet sampleObservationPoints();
-
-  void computeObservationRegions(double inflation_radius=0.2);
+  octomap::KeySet sampleObservationPoints(double sensorRange=0.5);
 
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
@@ -56,6 +59,8 @@ public:
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
                 const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::mutex &tree_mtx, bool initialize_evaluator=false);
+
+  std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> getObservationRegions()
   {
@@ -71,6 +76,8 @@ public:
   void randomizePlants(const geometry_msgs::Point &min, const geometry_msgs::Point &max, double min_dist);
 
   void publishMap();
+  void publishObservationRegions();
+  void publishObservationPoints(const octomap::KeySet &keys);
 
   bool startEvaluator();
   void setEvaluatorStartParams();

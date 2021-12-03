@@ -22,6 +22,10 @@ public:
 
   MoveGroupInterface::Plan getNextPlan();
 
+  void plannerLoop();
+
+  bool plannerLoopOnce(); // returns true if moved
+
 private:
   OctreeManager octree_manager;
 
