@@ -214,6 +214,9 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
   std::for_each(loop_policy, roiKeys.begin(), roiKeys.end(), [&](const octomap::OcTreeKey &roiKey)
   {
     octomap::point3d origin = planningTree->keyToCoord(roiKey);
+    if (samplingTree->search(transformToWorkspace(origin)) == nullptr) // ROI not in sampling region
+      return;
+
     std::for_each(loop_policy, sphere_vecs.begin(), sphere_vecs.end(), [&](const octomap::point3d &direction)
     {
       octomap::point3d end = origin + direction * sensorRange;
@@ -233,6 +236,9 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
       }
       if (!intersects)
       {
+        if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
+          return;
+
         obsPointMtx.lock();
         observationPoints.insert(planningTree->coordToKey(end));
         obsPointMtx.unlock();
@@ -346,6 +352,90 @@ std::shared_ptr<octomap_vpp::WorkspaceOcTree> OctreeManager::computeObservationR
   ros::Time endTime(ros::Time::now());
   ROS_INFO_STREAM("Inflation done, took " << (endTime - startTime).toSec() << "s");
   return observationRegions;
+}
+
+octomap::point3d OctreeManager::transformToMapFrame(const octomap::point3d &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  octomap::point3d pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+geometry_msgs::Pose OctreeManager::transformToMapFrame(const geometry_msgs::Pose &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  geometry_msgs::Pose pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+octomap::point3d OctreeManager::transformToWorkspace(const octomap::point3d &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  octomap::point3d pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+geometry_msgs::Pose OctreeManager::transformToWorkspace(const geometry_msgs::Pose &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  geometry_msgs::Pose pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
 }
 
 std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_prefix)

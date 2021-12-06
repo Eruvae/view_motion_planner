@@ -75,6 +75,12 @@ public:
     return observationRegions;
   }
 
+  octomap::point3d transformToMapFrame(const octomap::point3d &p);
+  geometry_msgs::Pose transformToMapFrame(const geometry_msgs::Pose &p);
+
+  octomap::point3d transformToWorkspace(const octomap::point3d &p);
+  geometry_msgs::Pose transformToWorkspace(const geometry_msgs::Pose &p);
+
   std::string saveOctomap(const std::string &name = "planningTree", bool name_is_prefix = true);
 
   int loadOctomap(const std::string &filename);
