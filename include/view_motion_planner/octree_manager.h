@@ -24,8 +24,8 @@ private:
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
   std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
   std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
-  boost::mutex own_mtx;
-  boost::mutex &tree_mtx;
+  boost::shared_mutex own_mtx;
+  boost::shared_mutex &tree_mtx;
   const std::string map_frame;
   ros::Publisher octomapPub;
   ros::Publisher observationRegionsPub;
@@ -58,7 +58,7 @@ public:
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-                const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::mutex &tree_mtx, bool initialize_evaluator=false);
+                const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx, bool initialize_evaluator=false);
 
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 

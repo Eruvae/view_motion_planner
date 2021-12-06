@@ -9,6 +9,8 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+#define RAYCAST_PARALLEL_LOOP
+
 namespace view_motion_planner
 {
 
@@ -21,29 +23,29 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
-  if (initialize_evaluator)
+  /*if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
     std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
     evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
-  }
+  }*/
 }
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::mutex &tree_mtx, bool initialize_evaluator) :
+              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx, bool initialize_evaluator) :
   tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
 {
-  if (initialize_evaluator)
+  /*if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
     std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
     evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
-  }
+  }*/
 }
 
 void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event)
@@ -89,23 +91,50 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
 
 octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
 {
+  ros::Time startTime(ros::Time::now());
   octomap::KeySet observationPoints;
+  boost::mutex obsPointMtx;
 
-  tree_mtx.lock();
+  tree_mtx.lock_shared();
   octomap::KeySet roiKeys = planningTree->getRoiKeys();
-  for (octomap::OcTreeKey roiKey : roiKeys)
+
+  #ifdef RAYCAST_PARALLEL_LOOP
+  auto loop_policy = std::execution::par;
+  #else
+  auto loop_policy = std::execution::seq;
+  #endif
+
+  std::for_each(loop_policy, roiKeys.begin(), roiKeys.end(), [&](const octomap::OcTreeKey &roiKey)
   {
     octomap::point3d origin = planningTree->keyToCoord(roiKey);
-    for (const octomap::point3d &direction : sphere_vecs)
+    std::for_each(loop_policy, sphere_vecs.begin(), sphere_vecs.end(), [&](const octomap::point3d &direction)
     {
-      octomap::point3d end;
-      // castRay(const point3d& origin, const point3d& direction, point3d& end, bool ignoreUnknownCells=false, double maxRange=-1.0) const;
-      bool intersects = planningTree->castRay(origin, direction, end, true, sensorRange);
+      octomap::point3d end = origin + direction * sensorRange;
+      octomap::KeyRay ray;
+      planningTree->computeRayKeys(origin, end, ray);
+      auto rayIt = ray.begin();
+      rayIt++; // ignore origin cell (will always be occupied)
+      bool intersects = false;
+      for (auto rayEnd = ray.end(); rayIt != rayEnd; rayIt++)
+      {
+        octomap_vpp::RoiOcTreeNode *node = planningTree->search(*rayIt);
+        if (node && planningTree->isNodeOccupied(node))
+        {
+          intersects = true;
+          break;
+        }
+      }
       if (!intersects)
+      {
+        obsPointMtx.lock();
         observationPoints.insert(planningTree->coordToKey(end));
-    }
-  }
-  tree_mtx.unlock();
+        obsPointMtx.unlock();
+      }
+    });
+  });
+  tree_mtx.unlock_shared();
+
+  ROS_INFO_STREAM("Generating observation points took " << (ros::Time::now() - startTime));
 
   return observationPoints;
 }
@@ -134,6 +163,8 @@ std::shared_ptr<octomap_vpp::WorkspaceOcTree> OctreeManager::computeObservationR
 
   octomap::KeySet observationPoints = sampleObservationPoints();
   publishObservationPoints(observationPoints);
+
+  return observationRegions; // DEBUG: no inflation for now
 
   for (const octomap::OcTreeKey &key : observationPoints)
   {
@@ -222,9 +253,9 @@ std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_pre
     fName << "_" << curDateTime;
   }
   fName << ".ot";
-  tree_mtx.lock();
+  tree_mtx.lock_shared();
   bool result = planningTree->write(fName.str());
-  tree_mtx.unlock();
+  tree_mtx.unlock_shared();
   return result ? fName.str() : "";
 }
 
@@ -273,9 +304,9 @@ void OctreeManager::publishMap()
   octomap_msgs::Octomap map_msg;
   map_msg.header.frame_id = map_frame;
   map_msg.header.stamp = ros::Time::now();
-  tree_mtx.lock();
+  tree_mtx.lock_shared();
   bool msg_generated = octomap_msgs::fullMapToMsg(*planningTree, map_msg);
-  tree_mtx.unlock();
+  tree_mtx.unlock_shared();
   if (msg_generated)
   {
     octomapPub.publish(map_msg);
