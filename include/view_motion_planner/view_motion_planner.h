@@ -16,8 +16,9 @@ using moveit::planning_interface::MoveItErrorCode;
 class ViewMotionPlanner
 {
 public:
-  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator=false)
-    : octree_manager(nh, tfBuffer, map_frame, tree_resolution, initialize_evaluator)
+  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false)
+    : octree_manager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, initialize_evaluator)
   {}
 
   MoveGroupInterface::Plan getNextPlan();

@@ -14,14 +14,121 @@
 namespace view_motion_planner
 {
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)),
-  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(own_mtx)
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator) :
+  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
+  observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)),
+  evaluator(nullptr), map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx),
+  wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  stMax(FLT_MAX, FLT_MAX, FLT_MAX)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
+  workspaceTreePub = nh.advertise<octomap_msgs::Octomap>("workspace_tree", 1, true);
+  samplingTreePub = nh.advertise<octomap_msgs::Octomap>("sampling_tree", 1, true);
   observationRegionsPub = nh.advertise<octomap_msgs::Octomap>("observation_regions", 1);
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
+
+  // Load workspace
+
+  octomap::AbstractOcTree *tree = octomap::AbstractOcTree::read(wstree_file);
+  if (!tree)
+  {
+    ROS_ERROR_STREAM("Workspace tree file could not be loaded");
+  }
+  else
+  {
+    octomap_vpp::CountingOcTree *countingTree = dynamic_cast<octomap_vpp::CountingOcTree*>(tree);
+
+    if (countingTree) // convert to workspace tree if counting tree loaded
+    {
+      workspaceTree.reset(new octomap_vpp::WorkspaceOcTree(*countingTree));
+      delete countingTree;
+    }
+    else
+    {
+      workspaceTree.reset(dynamic_cast<octomap_vpp::WorkspaceOcTree*>(tree));
+    }
+
+    if (!workspaceTree)
+    {
+      ROS_ERROR("Workspace tree type not recognized; please load either CountingOcTree or WorkspaceOcTree");
+      delete tree;
+    }
+    else
+    {
+      wsMin = octomap::point3d(FLT_MAX, FLT_MAX, FLT_MAX);
+      wsMax = octomap::point3d(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+      for (auto it = workspaceTree->begin_leafs(), end = workspaceTree->end_leafs(); it != end; it++)
+      {
+        octomap::point3d coord = it.getCoordinate();
+        if (coord.x() < wsMin.x()) wsMin.x() = coord.x();
+        if (coord.y() < wsMin.y()) wsMin.y() = coord.y();
+        if (coord.z() < wsMin.z()) wsMin.z() = coord.z();
+        if (coord.x() > wsMax.x()) wsMax.x() = coord.x();
+        if (coord.y() > wsMax.y()) wsMax.y() = coord.y();
+        if (coord.z() > wsMax.z()) wsMax.z() = coord.z();
+      }
+
+      octomap_msgs::Octomap ws_msg;
+      ws_msg.header.frame_id = ws_frame;
+      ws_msg.header.stamp = ros::Time(0);
+      bool msg_generated = octomap_msgs::fullMapToMsg(*workspaceTree, ws_msg);
+      if (msg_generated)
+      {
+        workspaceTreePub.publish(ws_msg);
+      }
+    }
+  }
+
+  // Load sampling tree
+
+  tree = octomap::AbstractOcTree::read(sampling_tree_file);
+  if (!tree)
+  {
+    ROS_ERROR_STREAM("Sampling tree file could not be loaded");
+  }
+  else
+  {
+    samplingTree.reset(dynamic_cast<octomap_vpp::WorkspaceOcTree*>(tree));
+    if (!samplingTree)
+    {
+      ROS_ERROR("Sampling tree must be of type WorkspaceOcTree");
+      delete tree;
+    }
+  }
+
+  if (!samplingTree) // if sampling tree not specified, use workspace octree
+  {
+    samplingTree = workspaceTree;
+  }
+
+  if (samplingTree)
+  {
+    stMin = octomap::point3d(FLT_MAX, FLT_MAX, FLT_MAX);
+    stMax = octomap::point3d(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    for (auto it = samplingTree->begin_leafs(), end = samplingTree->end_leafs(); it != end; it++)
+    {
+      octomap::point3d coord = it.getCoordinate();
+      if (coord.x() < stMin.x()) stMin.x() = coord.x();
+      if (coord.y() < stMin.y()) stMin.y() = coord.y();
+      if (coord.z() < stMin.z()) stMin.z() = coord.z();
+      if (coord.x() > stMax.x()) stMax.x() = coord.x();
+      if (coord.y() > stMax.y()) stMax.y() = coord.y();
+      if (coord.z() > stMax.z()) stMax.z() = coord.z();
+    }
+
+    octomap_msgs::Octomap st_msg;
+    st_msg.header.frame_id = ws_frame;
+    st_msg.header.stamp = ros::Time(0);
+    bool msg_generated = octomap_msgs::fullMapToMsg(*samplingTree, st_msg);
+    if (msg_generated)
+    {
+      samplingTreePub.publish(st_msg);
+    }
+  }
 
   /*if (initialize_evaluator)
   {

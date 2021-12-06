@@ -31,6 +31,6 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  ViewMotionPlanner planner(nh, tfBuffer, map_frame, tree_resolution, evaluate_results);
+  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, evaluate_results);
   planner.plannerLoop();
 }

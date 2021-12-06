@@ -21,13 +21,20 @@ class OctreeManager
 private:
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
+  std::shared_ptr<octomap_vpp::WorkspaceOcTree> workspaceTree;
+  std::shared_ptr<octomap_vpp::WorkspaceOcTree> samplingTree;
+  octomap::point3d wsMin, wsMax;
+  octomap::point3d stMin, stMax;
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
   std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
   std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
   boost::shared_mutex own_mtx;
   boost::shared_mutex &tree_mtx;
   const std::string map_frame;
+  const std::string ws_frame;
   ros::Publisher octomapPub;
+  ros::Publisher workspaceTreePub;
+  ros::Publisher samplingTreePub;
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
   ros::Subscriber roiSub;
@@ -54,7 +61,8 @@ private:
 
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
-  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator=false);
+  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false);
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
