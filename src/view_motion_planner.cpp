@@ -20,9 +20,9 @@ void ViewMotionPlanner::plannerLoop()
 
 bool ViewMotionPlanner::plannerLoopOnce()
 {
-  octree_manager.computeObservationRegions();
-  octree_manager.publishMap();
-  octree_manager.publishObservationRegions();
+  octree_manager->computeObservationRegions();
+  octree_manager->publishMap();
+  octree_manager->publishObservationRegions();
   return false;
 }
 

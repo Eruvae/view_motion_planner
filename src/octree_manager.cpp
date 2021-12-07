@@ -15,8 +15,9 @@ namespace view_motion_planner
 {
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
+                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
+                             bool initialize_evaluator) :
+  robot_manager(robot_manager), tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
   observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)),
   evaluator(nullptr), map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
@@ -237,6 +238,18 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
       if (!intersects)
       {
         if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
+          return;
+
+        geometry_msgs::Pose pose;
+        pose.position = octomap::pointOctomapToMsg(end);
+        pose.orientation = tf2::toMsg(getQuatInDir(-direction));
+
+        /*moveit::core::RobotStatePtr state = robot_manager->getPoseRobotState(pose);
+        if (state == nullptr)
+          return;*/
+
+        std::vector<double> joint_values = robot_manager->getPoseJointValues(pose);
+        if (joint_values.empty())
           return;
 
         obsPointMtx.lock();

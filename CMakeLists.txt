@@ -160,6 +160,7 @@ add_definitions(
 set(VIEW_MOTION_PLANNER_SRC_FILES
   src/view_motion_planner.cpp
   src/octree_manager.cpp
+  src/robot_manager.cpp
 )
 
 ## Declare a C++ library

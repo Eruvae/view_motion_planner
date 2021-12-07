@@ -12,13 +12,16 @@
 #include <roi_viewpoint_planner/gt_octree_loader.h>
 #include <roi_viewpoint_planner/evaluator.h>
 #include "view_motion_planner/vmp_utils.h"
+#include "view_motion_planner/robot_manager.h"
 
 namespace view_motion_planner
 {
 
 class OctreeManager
 {
-private:
+private:  
+  std::shared_ptr<RobotManager> robot_manager;
+
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> workspaceTree;
@@ -62,7 +65,8 @@ private:
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false);
+                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
+                bool initialize_evaluator=false);
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
