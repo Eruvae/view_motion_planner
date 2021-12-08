@@ -89,20 +89,27 @@ bool RobotManager::reset()
 
 moveit::core::RobotStatePtr RobotManager::getPoseRobotState(const geometry_msgs::Pose &pose)
 {
-  moveit::core::RobotStatePtr state(nullptr);
-  std::vector<double> joint_values;
-  manipulator_group_mtx.lock();
-  if (!manipulator_group.setJointValueTarget(pose, end_effector_link))
+  /* Set from IK options:
+     \brief If the group this state corresponds to is a chain and a solver is available, then the joint values can be
+      set by computing inverse kinematics.
+      The pose is assumed to be in the reference frame of the kinematic model. Returns true on success.
+      @param pose The pose the \e tip  link in the chain needs to achieve
+      @param tip The name of the link the pose is specified for
+      @param timeout The timeout passed to the kinematics solver on each attempt
+      @param constraint A state validity constraint to be required for IK solutions
+     bool setFromIK(const JointModelGroup* group, const geometry_msgs::Pose& pose, double timeout = 0.0,
+                 const GroupStateValidityCallbackFn& constraint = GroupStateValidityCallbackFn(),
+                 const kinematics::KinematicsQueryOptions& options = kinematics::KinematicsQueryOptions());
+     bool setFromIK(const JointModelGroup* group, const geometry_msgs::Pose& pose, const std::string& tip,
+                 double timeout = 0.0, const GroupStateValidityCallbackFn& constraint = GroupStateValidityCallbackFn(),
+                 const kinematics::KinematicsQueryOptions& options = kinematics::KinematicsQueryOptions());
+  */
+
+  moveit::core::RobotStatePtr state = manipulator_group.getCurrentState();
+  if (!state->setFromIK(jmg, pose, end_effector_link))
   {
-    manipulator_group_mtx.unlock();
-    return state;
+    return nullptr;
   }
-  manipulator_group.getJointValueTarget(joint_values);
-  manipulator_group_mtx.unlock();
-
-  state = manipulator_group.getCurrentState();
-
-  state->setJointGroupPositions(jmg, joint_values);
 
   // Collision checking
   collision_detection::CollisionRequest req;
