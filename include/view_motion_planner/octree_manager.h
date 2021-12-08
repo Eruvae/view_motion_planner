@@ -13,6 +13,7 @@
 #include <roi_viewpoint_planner/evaluator.h>
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
+#include <moveit_visual_tools/moveit_visual_tools.h>
 
 namespace view_motion_planner
 {
@@ -57,6 +58,9 @@ private:
   double eval_accumulatedPlanDuration;
   double eval_accumulatedPlanLength;
   std::string eval_lastStep;
+
+  // For visualizing things in rviz
+  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
 
   void registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event);
 

@@ -5,6 +5,7 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_interface/planning_interface.h>
 #include <moveit/robot_state/robot_state.h>
+#include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 
 namespace view_motion_planner
 {
@@ -16,11 +17,15 @@ class RobotManager
 {
 private:
   tf2_ros::Buffer &tfBuffer;
+  const std::string group_name;
   MoveGroupInterface manipulator_group;
-  robot_model_loader::RobotModelLoader robot_model_loader;
+  robot_model_loader::RobotModelLoaderPtr rml;
+  planning_scene_monitor::PlanningSceneMonitorPtr psm;
   robot_model::RobotModelPtr kinematic_model;
-  const robot_state::JointModelGroup* joint_model_group;
+  const robot_state::JointModelGroup* jmg;
   robot_state::RobotStatePtr kinematic_state;
+
+  boost::mutex manipulator_group_mtx;
 
   const std::string pose_reference_frame;
   const std::string end_effector_link;

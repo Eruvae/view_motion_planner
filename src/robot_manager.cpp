@@ -7,15 +7,19 @@ namespace view_motion_planner
 
 RobotManager::RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame, const std::string& group_name, const std::string &ee_link_name)
   : tfBuffer(tfBuffer),
+    group_name(group_name),
     manipulator_group(group_name),
-    robot_model_loader("robot_description"),
-    kinematic_model(robot_model_loader.getModel()),
-    joint_model_group(kinematic_model->getJointModelGroup(group_name)),
+    rml(new robot_model_loader::RobotModelLoader("robot_description")),
+    psm(new planning_scene_monitor::PlanningSceneMonitor(rml)),
+    kinematic_model(rml->getModel()),
+    jmg(kinematic_model->getJointModelGroup(group_name)),
     kinematic_state(new robot_state::RobotState(kinematic_model)),
     pose_reference_frame(pose_reference_frame),
     end_effector_link(ee_link_name)
 {
   manipulator_group.setPoseReferenceFrame(pose_reference_frame);
+  psm->startWorldGeometryMonitor();
+  psm->startSceneMonitor();
 
   start_values_set = nh.getParam("/roi_viewpoint_planner/initial_joint_values", joint_start_values);
 
@@ -86,29 +90,51 @@ bool RobotManager::reset()
 moveit::core::RobotStatePtr RobotManager::getPoseRobotState(const geometry_msgs::Pose &pose)
 {
   moveit::core::RobotStatePtr state(nullptr);
+  std::vector<double> joint_values;
+  manipulator_group_mtx.lock();
   if (!manipulator_group.setJointValueTarget(pose, end_effector_link))
   {
+    manipulator_group_mtx.unlock();
     return state;
   }
+  manipulator_group.getJointValueTarget(joint_values);
+  manipulator_group_mtx.unlock();
+
   state = manipulator_group.getCurrentState();
-  state->setJointGroupPositions(joint_model_group, manipulator_group.getCurrentJointValues());
+
+  state->setJointGroupPositions(jmg, joint_values);
+
+  // Collision checking
+  collision_detection::CollisionRequest req;
+  collision_detection::CollisionResult res;
+  state->updateCollisionBodyTransforms();
+  planning_scene_monitor::LockedPlanningSceneRW scene(psm);
+  scene->setCurrentState(*state);
+  scene->checkCollision(req, res);
+  if (res.collision)
+    return nullptr;
+
   return state;
 }
 
 moveit::core::RobotStatePtr RobotManager::getJointValueRobotState(const std::vector<double> &joint_values)
 {
   moveit::core::RobotStatePtr state = manipulator_group.getCurrentState();
-  state->setJointGroupPositions(joint_model_group, joint_values);
+  state->setJointGroupPositions(jmg, joint_values);
   return state;
 }
 
 std::vector<double> RobotManager::getPoseJointValues(const geometry_msgs::Pose &pose)
 {
+  std::vector<double> joint_values;
+  manipulator_group_mtx.lock();
   if (!manipulator_group.setJointValueTarget(pose, end_effector_link))
   {
-    return std::vector<double>();
+    manipulator_group_mtx.unlock();
+    return joint_values;
   }
-  return manipulator_group.getCurrentJointValues();
+  manipulator_group.getJointValueTarget(joint_values);
+  return joint_values;
 }
 
 bool RobotManager::moveToPose(const geometry_msgs::Pose &goal_pose, bool async, double *plan_length, double *traj_duration)
@@ -145,7 +171,7 @@ bool RobotManager::moveToState(const robot_state::RobotState &goal_state, bool a
 
 bool RobotManager::moveToState(const std::vector<double> &joint_values, bool async, double *plan_length, double *traj_duration)
 {
-  kinematic_state->setJointGroupPositions(joint_model_group, joint_values);
+  kinematic_state->setJointGroupPositions(jmg, joint_values);
   kinematic_state->enforceBounds();
   manipulator_group.setJointValueTarget(*kinematic_state);
 

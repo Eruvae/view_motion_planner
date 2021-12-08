@@ -32,6 +32,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
+  visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(map_frame, "/vmp_visual_markers"));
+
   // Load workspace
 
   octomap::AbstractOcTree *tree = octomap::AbstractOcTree::read(wstree_file);
@@ -201,6 +203,7 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
 {
   ros::Time startTime(ros::Time::now());
   octomap::KeySet observationPoints;
+  std::vector<moveit::core::RobotStatePtr> robotStates;
   boost::mutex obsPointMtx;
 
   tree_mtx.lock_shared();
@@ -244,16 +247,17 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
         pose.position = octomap::pointOctomapToMsg(end);
         pose.orientation = tf2::toMsg(getQuatInDir(-direction));
 
-        /*moveit::core::RobotStatePtr state = robot_manager->getPoseRobotState(pose);
+        moveit::core::RobotStatePtr state = robot_manager->getPoseRobotState(pose);
         if (state == nullptr)
-          return;*/
-
-        std::vector<double> joint_values = robot_manager->getPoseJointValues(pose);
-        if (joint_values.empty())
           return;
+
+        /* std::vector<double> joint_values = robot_manager->getPoseJointValues(pose);
+        if (joint_values.empty())
+          return; */
 
         obsPointMtx.lock();
         observationPoints.insert(planningTree->coordToKey(end));
+        robotStates.push_back(state);
         obsPointMtx.unlock();
       }
     });
@@ -261,6 +265,14 @@ octomap::KeySet OctreeManager::sampleObservationPoints(double sensorRange)
   tree_mtx.unlock_shared();
 
   ROS_INFO_STREAM("Generating observation points took " << (ros::Time::now() - startTime));
+
+  ROS_INFO_STREAM("Visualizing " << robotStates.size() << " robot states");
+  for (size_t i=0; i < robotStates.size(); i++)
+  {
+    ROS_INFO_STREAM("State " << i);
+    visual_tools_->publishRobotState(robotStates[i]);
+    ros::Duration(1).sleep();
+  }
 
   return observationPoints;
 }
