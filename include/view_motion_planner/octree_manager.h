@@ -18,6 +18,12 @@
 namespace view_motion_planner
 {
 
+struct Viewpose
+{
+  moveit::core::RobotStatePtr state;
+  geometry_msgs::Pose pose;
+};
+
 class OctreeManager
 {
 private:  
@@ -59,12 +65,7 @@ private:
   double eval_accumulatedPlanLength;
   std::string eval_lastStep;
 
-  // For visualizing things in rviz
-  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
-
   void registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event);
-
-  octomap::KeySet sampleObservationPoints(double sensorRange=0.5);
 
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
@@ -76,7 +77,9 @@ public:
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
                 const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx, bool initialize_evaluator=false);
 
-  std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
+  std::vector<Viewpose> sampleObservationPoses(double sensorRange=0.5);
+
+  //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> getObservationRegions()
   {
@@ -100,6 +103,7 @@ public:
   void publishMap();
   void publishObservationRegions();
   void publishObservationPoints(const octomap::KeySet &keys);
+  void publishObservationPoints(const std::vector<Viewpose> &vps);
 
   bool startEvaluator();
   void setEvaluatorStartParams();
