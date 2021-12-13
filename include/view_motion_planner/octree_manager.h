@@ -14,15 +14,10 @@
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
 #include <moveit_visual_tools/moveit_visual_tools.h>
+#include "view_motion_planner/viewpose_graph.h"
 
 namespace view_motion_planner
 {
-
-struct Viewpose
-{
-  moveit::core::RobotStatePtr state;
-  geometry_msgs::Pose pose;
-};
 
 class OctreeManager
 {

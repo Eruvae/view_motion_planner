@@ -26,6 +26,19 @@ void ViewMotionPlanner::poseVisualizeThread()
   }
 }
 
+void ViewMotionPlanner::generateViewposeGraph()
+{
+  observationPoseMtx.lock_shared();
+  std::vector<Viewpose> vps = observationPoses;
+  observationPoseMtx.unlock_shared();
+
+  ViewposeGraphManager graph_manager;
+  for (const Viewpose &vp : vps)
+  {
+    graph_manager.addViewpose(vp);
+  }
+}
+
 void ViewMotionPlanner::plannerLoop()
 {
   boost::thread visualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));

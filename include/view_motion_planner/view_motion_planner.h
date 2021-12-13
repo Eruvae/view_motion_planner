@@ -29,6 +29,8 @@ public:
 
   void poseVisualizeThread();
 
+  void generateViewposeGraph();
+
   void plannerLoop();
 
   bool plannerLoopOnce(); // returns true if moved
