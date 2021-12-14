@@ -32,10 +32,18 @@ void ViewMotionPlanner::generateViewposeGraph()
   std::vector<Viewpose> vps = observationPoses;
   observationPoseMtx.unlock_shared();
 
-  ViewposeGraphManager graph_manager;
+  ViewposeGraphManager graph_manager(robot_manager->getRobotModel(), robot_manager->getJointModelGroup());
   for (const Viewpose &vp : vps)
   {
     graph_manager.addViewpose(vp);
+  }
+  for (auto [vi, vi_end] = boost::vertices(graph_manager.getGraph()); vi != vi_end; vi++)
+  {
+    graph_manager.connectNeighbors(*vi, 2);
+  }
+  for (auto [ei, ei_end] = boost::edges(graph_manager.getGraph()); ei != ei_end; ei++)
+  {
+    visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup());
   }
 }
 
@@ -57,6 +65,10 @@ bool ViewMotionPlanner::plannerLoopOnce()
 
   octree_manager->publishMap();
   octree_manager->publishObservationPoints(newPoses);
+
+  ROS_INFO_STREAM("Generating viewpose graph");
+  generateViewposeGraph();
+  ROS_INFO_STREAM("Viewpose graph published");
   return false;
 }
 

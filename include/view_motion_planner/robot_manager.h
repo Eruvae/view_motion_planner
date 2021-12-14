@@ -21,7 +21,7 @@ private:
   MoveGroupInterface manipulator_group;
   robot_model_loader::RobotModelLoaderPtr rml;
   planning_scene_monitor::PlanningSceneMonitorPtr psm;
-  robot_model::RobotModelPtr kinematic_model;
+  robot_model::RobotModelConstPtr kinematic_model;
   const robot_state::JointModelGroup* jmg;
   robot_state::RobotStatePtr kinematic_state;
 
@@ -37,6 +37,16 @@ private:
 public:
   RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame = "world",
                   const std::string& group_name = "manipulator", const std::string &ee_link_name = "camera_link");
+
+  moveit::core::RobotModelConstPtr getRobotModel()
+  {
+    return kinematic_model;
+  }
+
+  const robot_state::JointModelGroup* getJointModelGroup()
+  {
+    return jmg;
+  }
 
   bool getCurrentTransform(geometry_msgs::TransformStamped &cur_tf);
   std::vector<double> getCurrentJointValues();
