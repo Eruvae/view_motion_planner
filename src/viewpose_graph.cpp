@@ -9,8 +9,8 @@
 namespace view_motion_planner
 {
 
-ViewposeGraphManager::ViewposeGraphManager(const moveit::core::RobotModelConstPtr &kinematic_model, const robot_state::JointModelGroup* jmg)
-  : kinematic_model(kinematic_model), jmg(jmg), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>())
+ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager)
+  : robot_manager(robot_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>())
 {
   neighbor_data->setDistanceFunction(boost::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, _1, _2));
 }
@@ -27,22 +27,58 @@ double ViewposeGraphManager::getVertexDistancePose(Vertex a, Vertex b)
 
 double ViewposeGraphManager::getVertexDistanceJoints(Vertex a, Vertex b)
 {
-  return graph[a].state->distance(*(graph[b].state), jmg);
+  return graph[a].state->distance(*(graph[b].state), robot_manager->getJointModelGroup());
 }
 
 void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors)
 {
+  double traj_step = 0.1;
+  double max_traj_length = 5.0;
   std::vector<Vertex> neighbors;
   neighbor_data->nearestK(v, num_neighbors, neighbors);
 
   for (const Vertex &nv : neighbors)
   {
-    // TODO check collision, generate trajectory
+    std::pair<Edge, bool> check_edge = boost::edge(v, nv, graph);
+    if (check_edge.second) // edge already exists
+      continue;
+
+    moveit::core::RobotStatePtr from = graph[v].state;
+    moveit::core::RobotStatePtr to = graph[nv].state;
+
     Trajectory t;
-    t.traj.reset(new robot_trajectory::RobotTrajectory(kinematic_model, jmg));
-    t.traj->addSuffixWayPoint(graph[v].state, 0);
-    t.traj->addSuffixWayPoint(graph[nv].state, 1);
-    std::pair<Edge, bool> e = boost::add_edge(v, nv, t, graph);
+    t.cost = from->distance(*to, robot_manager->getJointModelGroup());
+    if (t.cost > max_traj_length) // don't compute trajectory
+      continue;
+
+    t.traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
+    t.traj->addSuffixWayPoint(from, 0);
+    bool found_traj = true;
+    if (t.cost > traj_step) // interpolate points
+    {
+      size_t num_steps = static_cast<size_t>(t.cost / traj_step);
+      double frac_step = 1.0 / num_steps;
+      for (size_t i = 1; i < num_steps; i++) // don't check first and last state (assume valid)
+      {
+        moveit::core::RobotStatePtr temp_state(new moveit::core::RobotState(*from));
+        from->interpolate(*to, i * frac_step, *temp_state, robot_manager->getJointModelGroup());
+        temp_state->update();
+
+        bool state_valid = robot_manager->isValid(temp_state);
+        if (!state_valid) // don't add edge
+        {
+          found_traj = false;
+          break;
+        }
+        t.traj->addSuffixWayPoint(temp_state, frac_step);
+      }
+    }
+    if (found_traj)
+    {
+      t.traj->addSuffixWayPoint(to, 1);
+      // TODO: time parameterization
+      boost::add_edge(v, nv, t, graph);
+    }
   }
 }
 

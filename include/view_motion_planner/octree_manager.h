@@ -46,7 +46,7 @@ private:
   size_t old_rois;
   octomap::KeySet encountered_keys;
 
-  const std::vector<octomath::Vector3> sphere_vecs = getFibonacciSphereVectors(1000);
+  const std::vector<octomath::Vector3> sphere_vecs;
 
   // Evaluator variables
   size_t eval_trial_num;
@@ -66,7 +66,7 @@ public:
   // Constructor to store own tree, subscribe to pointcloud roi
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
-                bool initialize_evaluator=false);
+                size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,

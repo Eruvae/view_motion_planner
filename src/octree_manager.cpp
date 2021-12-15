@@ -16,14 +16,15 @@ namespace view_motion_planner
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                              const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
-                             bool initialize_evaluator) :
+                             size_t num_sphere_vecs, bool initialize_evaluator) :
   robot_manager(robot_manager), tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
-  observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)),
-  evaluator(nullptr), map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
   stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
-  stMax(FLT_MAX, FLT_MAX, FLT_MAX)
+  stMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)),
+  evaluator(nullptr), tree_mtx(own_mtx), map_frame(map_frame), ws_frame(ws_frame),  old_rois(0),
+  sphere_vecs(getFibonacciSphereVectors(num_sphere_vecs))
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   workspaceTreePub = nh.advertise<octomap_msgs::Octomap>("workspace_tree", 1, true);

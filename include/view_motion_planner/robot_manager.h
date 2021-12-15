@@ -48,6 +48,11 @@ public:
     return jmg;
   }
 
+  planning_scene_monitor::PlanningSceneMonitorPtr getPlanningSceneMonitor()
+  {
+    return psm;
+  }
+
   bool getCurrentTransform(geometry_msgs::TransformStamped &cur_tf);
   std::vector<double> getCurrentJointValues();
   bool reset();
@@ -55,6 +60,9 @@ public:
   // Get robot states
   moveit::core::RobotStatePtr getPoseRobotState(const geometry_msgs::Pose &pose);
   moveit::core::RobotStatePtr getJointValueRobotState(const std::vector<double> &joint_values);
+
+  // Collision check
+  bool isValid(const moveit::core::RobotStatePtr &state);
 
   // Get joint configurations
   std::vector<double> getPoseJointValues(const geometry_msgs::Pose &pose);

@@ -111,14 +111,7 @@ moveit::core::RobotStatePtr RobotManager::getPoseRobotState(const geometry_msgs:
     return nullptr;
   }
 
-  // Collision checking
-  collision_detection::CollisionRequest req;
-  collision_detection::CollisionResult res;
-  state->updateCollisionBodyTransforms();
-  planning_scene_monitor::LockedPlanningSceneRW scene(psm);
-  scene->setCurrentState(*state);
-  scene->checkCollision(req, res);
-  if (res.collision)
+  if (!isValid(state))
     return nullptr;
 
   return state;
@@ -129,6 +122,16 @@ moveit::core::RobotStatePtr RobotManager::getJointValueRobotState(const std::vec
   moveit::core::RobotStatePtr state = manipulator_group.getCurrentState();
   state->setJointGroupPositions(jmg, joint_values);
   return state;
+}
+
+bool RobotManager::isValid(const moveit::core::RobotStatePtr &state)
+{
+  // Collision checking
+  collision_detection::CollisionRequest req;
+  collision_detection::CollisionResult res;
+  planning_scene_monitor::LockedPlanningSceneRO scene(psm);
+  scene->checkCollision(req, res, *state);
+  return !res.collision;
 }
 
 std::vector<double> RobotManager::getPoseJointValues(const geometry_msgs::Pose &pose)

@@ -18,12 +18,7 @@ class ViewMotionPlanner
 {
 public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false)
-    : random_engine(std::random_device{}()),
-      visual_tools_(new moveit_visual_tools::MoveItVisualTools(map_frame, "/vmp_visual_markers")),
-      robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
-      octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, robot_manager, initialize_evaluator))
-  {}
+                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false);
 
   MoveGroupInterface::Plan getNextPlan();
 
@@ -38,11 +33,11 @@ public:
 private:
   std::default_random_engine random_engine;
 
-  // For visualizing things in rviz
-  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
-
   std::shared_ptr<RobotManager> robot_manager;
   std::shared_ptr<OctreeManager> octree_manager;
+
+  // For visualizing things in rviz
+  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
 
   std::vector<Viewpose> observationPoses;
   boost::shared_mutex observationPoseMtx;

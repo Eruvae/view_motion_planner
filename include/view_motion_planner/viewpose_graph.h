@@ -6,6 +6,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <unordered_map>
 #include <ompl/datastructures/NearestNeighbors.h>
+#include "view_motion_planner/robot_manager.h"
 
 namespace view_motion_planner
 {
@@ -25,7 +26,7 @@ struct Trajectory
 using ViewposeGraph = boost::adjacency_list<
 boost::hash_setS, // OutEdgeListSelector
 boost::hash_setS, // VertexListSelector
-boost::directedS, // DirectedSelector
+boost::undirectedS, // DirectedSelector
 Viewpose, // VertexProperty
 Trajectory, // EdgeProperty
 boost::no_property, // GraphProperty
@@ -39,8 +40,7 @@ class ViewposeGraphManager
 private:
   ViewposeGraph graph;
 
-  moveit::core::RobotModelConstPtr kinematic_model;
-  const robot_state::JointModelGroup* jmg;
+  std::shared_ptr<RobotManager> robot_manager;
 
   std::unique_ptr<ompl::NearestNeighbors<Vertex>> neighbor_data;
 
@@ -48,7 +48,7 @@ private:
   double getVertexDistanceJoints(Vertex a, Vertex b);
 
 public:
-  ViewposeGraphManager(const moveit::core::RobotModelConstPtr &kinematic_model, const robot_state::JointModelGroup* jmg);
+  ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager);
 
   const ViewposeGraph& getGraph() const
   {
