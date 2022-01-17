@@ -30,10 +30,8 @@ double ViewposeGraphManager::getVertexDistanceJoints(Vertex a, Vertex b)
   return graph[a].state->distance(*(graph[b].state), robot_manager->getJointModelGroup());
 }
 
-void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors)
+void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step)
 {
-  double traj_step = 0.1;
-  double max_traj_length = 5.0;
   std::vector<Vertex> neighbors;
   neighbor_data->nearestK(v, num_neighbors, neighbors);
 

@@ -1,4 +1,6 @@
 #include "view_motion_planner/view_motion_planner.h"
+#include <boost/graph/connected_components.hpp>
+#include <boost/graph/incremental_components.hpp>
 
 namespace view_motion_planner
 {
@@ -44,6 +46,8 @@ void ViewMotionPlanner::generateViewposeGraph()
   std::vector<Viewpose> vps = observationPoses;
   observationPoseMtx.unlock_shared();
 
+  ROS_INFO_STREAM("Generating viewpose graph");
+  ros::Time startTime(ros::Time::now());
   ViewposeGraphManager graph_manager(robot_manager);
   for (const Viewpose &vp : vps)
   {
@@ -51,14 +55,25 @@ void ViewMotionPlanner::generateViewposeGraph()
   }
   for (auto [vi, vi_end] = boost::vertices(graph_manager.getGraph()); vi != vi_end; vi++)
   {
-    graph_manager.connectNeighbors(*vi, 5);
+    graph_manager.connectNeighbors(*vi, 5, DBL_MAX);
   }
+  ROS_INFO_STREAM("Generating graph took " << (ros::Time::now() - startTime));
+  ROS_INFO_STREAM("Computing connected components");
+  startTime = ros::Time::now();
+  using VPCMap = std::unordered_map<Vertex, size_t>;
+  using VPCPropertyMap = boost::associative_property_map<VPCMap>;
+  VPCMap component_map;
+  VPCPropertyMap component_property_map(component_map);
+  size_t num = boost::connected_components(graph_manager.getGraph(), component_property_map);
+  ROS_INFO_STREAM("Computing connected components took " << (ros::Time::now() - startTime) << ", " << num << " components");
+  startTime = ros::Time::now();
   visual_tools_->deleteAllMarkers();
   for (auto [ei, ei_end] = boost::edges(graph_manager.getGraph()); ei != ei_end; ei++)
   {
-    visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup());
+    visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup(), visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
   }
   visual_tools_->trigger();
+  ROS_INFO_STREAM("Viewpose graph published, took " << (ros::Time::now() - startTime));
 }
 
 void ViewMotionPlanner::plannerLoop()
@@ -80,9 +95,8 @@ bool ViewMotionPlanner::plannerLoopOnce()
   octree_manager->publishMap();
   octree_manager->publishObservationPoints(newPoses);
 
-  ROS_INFO_STREAM("Generating viewpose graph");
+
   generateViewposeGraph();
-  ROS_INFO_STREAM("Viewpose graph published");
   return false;
 }
 

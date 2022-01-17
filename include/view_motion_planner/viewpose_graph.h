@@ -25,7 +25,7 @@ struct Trajectory
 
 using ViewposeGraph = boost::adjacency_list<
 boost::hash_setS, // OutEdgeListSelector
-boost::hash_setS, // VertexListSelector
+boost::vecS, // VertexListSelector
 boost::undirectedS, // DirectedSelector
 Viewpose, // VertexProperty
 Trajectory, // EdgeProperty
@@ -61,7 +61,7 @@ public:
     neighbor_data->add(v);
   }
 
-  void connectNeighbors(const Vertex &v, size_t num_neighbors=5);
+  void connectNeighbors(const Vertex &v, size_t num_neighbors=5, double max_traj_length = 5.0, double traj_step = 0.1);
 
 };
 
