@@ -55,6 +55,8 @@ public:
 
   bool getCurrentTransform(geometry_msgs::TransformStamped &cur_tf);
   std::vector<double> getCurrentJointValues();
+  moveit::core::RobotStatePtr getCurrentState();
+  geometry_msgs::Pose getCurrentPose();
   bool reset();
 
   // Get robot states

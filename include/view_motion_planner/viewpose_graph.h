@@ -55,10 +55,11 @@ public:
     return graph;
   }
 
-  void addViewpose(const Viewpose &vp)
+  Vertex addViewpose(const Viewpose &vp)
   {
     Vertex v = boost::add_vertex(vp, graph);
     neighbor_data->add(v);
+    return v;
   }
 
   void connectNeighbors(const Vertex &v, size_t num_neighbors=5, double max_traj_length = 5.0, double traj_step = 0.1);

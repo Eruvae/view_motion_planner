@@ -57,7 +57,13 @@ void ViewMotionPlanner::generateViewposeGraph()
   {
     graph_manager.connectNeighbors(*vi, 5, DBL_MAX);
   }
-  ROS_INFO_STREAM("Generating graph took " << (ros::Time::now() - startTime));
+  Viewpose cam_vp;
+  cam_vp.state = robot_manager->getCurrentState();
+  cam_vp.pose = robot_manager->getCurrentPose();
+  Vertex cam_vert = graph_manager.addViewpose(cam_vp);
+  graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
+
+  ROS_INFO_STREAM("Generating graph took " << (ros::Time::now() - startTime) << ", " << vps.size() << " poses inserted");
   ROS_INFO_STREAM("Computing connected components");
   startTime = ros::Time::now();
   using VPCMap = std::unordered_map<Vertex, size_t>;
@@ -70,7 +76,8 @@ void ViewMotionPlanner::generateViewposeGraph()
   visual_tools_->deleteAllMarkers();
   for (auto [ei, ei_end] = boost::edges(graph_manager.getGraph()); ei != ei_end; ei++)
   {
-    visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup(), visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
+    visual_tools_->publishLine(graph_manager.getGraph()[ei->m_source].pose.position, graph_manager.getGraph()[ei->m_target].pose.position, visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
+    // visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup(), visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
   }
   visual_tools_->trigger();
   ROS_INFO_STREAM("Viewpose graph published, took " << (ros::Time::now() - startTime));

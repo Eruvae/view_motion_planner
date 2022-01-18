@@ -79,6 +79,16 @@ std::vector<double> RobotManager::getCurrentJointValues()
   return manipulator_group.getCurrentJointValues();
 }
 
+moveit::core::RobotStatePtr RobotManager::getCurrentState()
+{
+  return manipulator_group.getCurrentState();
+}
+
+geometry_msgs::Pose RobotManager::getCurrentPose()
+{
+  return manipulator_group.getCurrentPose(end_effector_link).pose;
+}
+
 bool RobotManager::reset()
 {
   if (start_values_set)
