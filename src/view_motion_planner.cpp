@@ -9,7 +9,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
                   const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator)
   : random_engine(std::random_device{}()),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
-    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, robot_manager, 100, initialize_evaluator)),
+    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
     visual_tools_(new moveit_visual_tools::MoveItVisualTools(map_frame, "visual_markers", robot_manager->getPlanningSceneMonitor()))
 {
   visual_tools_->loadMarkerPub(true);

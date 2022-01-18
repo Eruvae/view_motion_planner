@@ -15,9 +15,9 @@ namespace view_motion_planner
 {
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
-                             size_t num_sphere_vecs, bool initialize_evaluator) :
-  robot_manager(robot_manager), tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
+                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
+                             std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs, bool initialize_evaluator) :
+  robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
   stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
@@ -143,8 +143,9 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
 }
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
+              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
+                             std::default_random_engine &random_engine, bool initialize_evaluator) :
+  random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
 {
   /*if (initialize_evaluator)
@@ -265,6 +266,117 @@ std::vector<Viewpose> OctreeManager::sampleObservationPoses(double sensorRange)
   ROS_INFO_STREAM("Generating observation poses took " << (ros::Time::now() - startTime));
 
   return observationPoses;
+}
+
+void OctreeManager::updateRoiTargets()
+{
+  std::vector<octomap::point3d> new_roi_targets;
+
+  tree_mtx.lock_shared();
+  octomap::KeySet roi = planningTree->getRoiKeys();
+  octomap::KeySet freeNeighbours;
+  for (const octomap::OcTreeKey &key : roi)
+  {
+    planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_6);
+  }
+  for (const octomap::OcTreeKey &key : freeNeighbours)
+  {
+    if (planningTree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
+    {
+      new_roi_targets.push_back(planningTree->keyToCoord(key));
+    }
+  }
+  tree_mtx.unlock_shared();
+
+  current_roi_targets = new_roi_targets;
+}
+
+void OctreeManager::updateExplTargets()
+{
+  std::vector<octomap::point3d> new_expl_targets;
+  octomap::point3d stMin_tf = transformToMapFrame(stMin), stMax_tf = transformToMapFrame(stMax);
+  for (unsigned int i = 0; i < 3; i++)
+  {
+    if (stMin_tf(i) > stMax_tf(i))
+      std::swap(stMin_tf(i), stMax_tf(i));
+  }
+  for (auto it = planningTree->begin_leafs_bbx(stMin_tf, stMax_tf), end = planningTree->end_leafs_bbx(); it != end; it++)
+  {
+    if (samplingTree != nullptr && samplingTree->search(transformToWorkspace(it.getCoordinate())) == nullptr)
+    {
+      continue; // sampling tree specified and sampled point not in sampling tree
+    }
+    if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
+    {
+      if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6) &&
+          planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
+      {
+        new_expl_targets.push_back(it.getCoordinate());
+      }
+    }
+  }
+
+  if (new_expl_targets.empty())
+  {
+    // TODO: alternative update
+  }
+
+  current_expl_targets = new_expl_targets;
+}
+
+octomap::point3d OctreeManager::getRandomRoiTarget()
+{
+  if (current_roi_targets.empty())
+    return octomap::point3d();
+
+  std::uniform_int_distribution<size_t> distribution(0, current_roi_targets.size() - 1);
+  return current_roi_targets[distribution(random_engine)];
+}
+
+octomap::point3d OctreeManager::getRandomExplTarget()
+{
+  if (current_expl_targets.empty())
+    return octomap::point3d();
+
+  std::uniform_int_distribution<size_t> distribution(0, current_roi_targets.size() - 1);
+  return current_expl_targets[distribution(random_engine)];
+}
+
+bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool roi_target, double minSensorRange, double maxSensorRange)
+{
+  octomap::point3d origin = roi_target ? getRandomRoiTarget() : getRandomExplTarget();
+  octomap::point3d end = sampleRandomViewpoint(origin, minSensorRange, maxSensorRange, random_engine);
+  octomap::KeyRay ray;
+
+  tree_mtx.lock_shared();
+  planningTree->computeRayKeys(origin, end, ray);
+  auto rayIt = ray.begin();
+  for (auto rayEnd = ray.end(); rayIt != rayEnd; rayIt++)
+  {
+    octomap_vpp::RoiOcTreeNode *node = planningTree->search(*rayIt);
+    if (node && planningTree->isNodeOccupied(node))
+    {
+      tree_mtx.unlock_shared();
+      return false;
+    }
+  }
+  if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
+  {
+    tree_mtx.unlock_shared();
+    return false;
+  }
+
+  vp.pose.position = octomap::pointOctomapToMsg(end);
+  vp.pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
+
+  vp.state = robot_manager->getPoseRobotState(vp.pose);
+  if (vp.state == nullptr)
+  {
+    tree_mtx.unlock_shared();
+    return false;
+  }
+  tree_mtx.unlock_shared();
+  return true;
 }
 
 /*

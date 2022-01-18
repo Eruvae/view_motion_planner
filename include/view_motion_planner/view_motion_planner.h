@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ros/ros.h>
+#include <random>
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_interface/planning_interface.h>

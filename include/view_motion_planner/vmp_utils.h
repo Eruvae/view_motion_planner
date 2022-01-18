@@ -2,6 +2,7 @@
 
 #include <octomap/octomap_types.h>
 #include <tf2/utils.h>
+#include <random>
 
 namespace view_motion_planner
 {
@@ -45,6 +46,35 @@ static inline tf2::Vector3 getPerpVectorStark(const tf2::Vector3 &u)
 
   tf2::Vector3 v = u.cross(tf2::Vector3(xm, ym, zm));
   return v;
+}
+
+template<typename RandomEngine>
+octomap::point3d sampleRandomViewpoint(const octomap::point3d &target, double minDist, double maxDist, RandomEngine &engine)
+{
+  // Method 1
+  /*std::normal_distribution<double> dir_distribution(0.0, 1.0);
+  octomap::point3d p;
+  do
+  {
+    for (size_t i = 0; i < 3; i++)
+      p(i) = dir_distribution(engine);
+  } while(p.norm_sq() < 0.0001);*/
+
+  // Method 2
+  std::uniform_real_distribution<double> z_dist(-1, 1);
+  std::uniform_real_distribution<double> theta_dist(-M_PI, M_PI);
+  double z = z_dist(engine);
+  double theta = z_dist(engine);
+  double x = std::sin(theta)*std::sqrt(1 - z*z);
+  double y = std::cos(theta)*std::sqrt(1 - z*z);
+  octomap::point3d p(x, y, z);
+
+  // Set length and offset
+  p.normalize();
+  std::uniform_real_distribution<double> dist_distribution(minDist, maxDist);
+  p *= dist_distribution(engine);
+  p += target;
+  return p;
 }
 
 static inline tf2::Quaternion getQuatInDir(const octomath::Vector3 &dirVec)

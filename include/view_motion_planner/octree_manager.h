@@ -24,6 +24,8 @@ class OctreeManager
 private:  
   std::shared_ptr<RobotManager> robot_manager;
 
+  std::default_random_engine &random_engine;
+
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> workspaceTree;
@@ -46,6 +48,9 @@ private:
   size_t old_rois;
   octomap::KeySet encountered_keys;
 
+  std::vector<octomap::point3d> current_roi_targets;
+  std::vector<octomap::point3d> current_expl_targets;
+
   const std::vector<octomath::Vector3> sphere_vecs;
 
   // Evaluator variables
@@ -65,14 +70,23 @@ private:
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::shared_ptr<RobotManager> robot_manager,
-                size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
+                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
+                std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-                const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx, bool initialize_evaluator=false);
+                const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
+                std::default_random_engine &random_engine, bool initialize_evaluator=false);
 
   std::vector<Viewpose> sampleObservationPoses(double sensorRange=0.5);
+
+  void updateRoiTargets();
+  octomap::point3d getRandomRoiTarget();
+
+  void updateExplTargets();
+  octomap::point3d getRandomExplTarget();
+
+  bool sampleRandomViewPose(Viewpose &vp, bool roi_target, double minSensorRange, double maxSensorRange);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 
