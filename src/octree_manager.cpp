@@ -194,9 +194,19 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
     octomap_vpp::pointCloud2ToOctomapByIndices(roi.cloud, roi.roi_indices, pcFrameTf.transform, inlierCloud, outlierCloud, fullCloud);
 
   tree_mtx.lock();
+  ros::Time insertStartTime(ros::Time::now());
   planningTree->insertPointCloud(fullCloud, scan_orig);
   planningTree->insertRegionScan(inlierCloud, outlierCloud);
+  ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insertStartTime) << " s");
+  ros::Time updateTargetStartTime(ros::Time::now());
+  target_vector_mtx.lock();
+  updateRoiTargets();
+  updateExplTargets();
+  target_vector_mtx.unlock();
+  ROS_INFO_STREAM("Updating targets took " << (ros::Time::now() - updateTargetStartTime) << " s");
+  ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
   tree_mtx.unlock();
+  publishMap();
 }
 
 std::vector<Viewpose> OctreeManager::sampleObservationPoses(double sensorRange)
@@ -268,11 +278,11 @@ std::vector<Viewpose> OctreeManager::sampleObservationPoses(double sensorRange)
   return observationPoses;
 }
 
+// lock tree mutex before calling function
 void OctreeManager::updateRoiTargets()
 {
   std::vector<octomap::point3d> new_roi_targets;
 
-  tree_mtx.lock_shared();
   octomap::KeySet roi = planningTree->getRoiKeys();
   octomap::KeySet freeNeighbours;
   for (const octomap::OcTreeKey &key : roi)
@@ -286,11 +296,11 @@ void OctreeManager::updateRoiTargets()
       new_roi_targets.push_back(planningTree->keyToCoord(key));
     }
   }
-  tree_mtx.unlock_shared();
 
   current_roi_targets = new_roi_targets;
 }
 
+// lock tree mutex before calling function
 void OctreeManager::updateExplTargets()
 {
   std::vector<octomap::point3d> new_expl_targets;
@@ -324,27 +334,48 @@ void OctreeManager::updateExplTargets()
   current_expl_targets = new_expl_targets;
 }
 
-octomap::point3d OctreeManager::getRandomRoiTarget()
+bool OctreeManager::getRandomRoiTarget(octomap::point3d &target)
 {
   if (current_roi_targets.empty())
-    return octomap::point3d();
+    return false;
 
   std::uniform_int_distribution<size_t> distribution(0, current_roi_targets.size() - 1);
-  return current_roi_targets[distribution(random_engine)];
+  target = current_roi_targets[distribution(random_engine)];
+  return true;
 }
 
-octomap::point3d OctreeManager::getRandomExplTarget()
+bool OctreeManager::getRandomExplTarget(octomap::point3d &target)
 {
   if (current_expl_targets.empty())
-    return octomap::point3d();
+    return false;
 
-  std::uniform_int_distribution<size_t> distribution(0, current_roi_targets.size() - 1);
-  return current_expl_targets[distribution(random_engine)];
+  std::uniform_int_distribution<size_t> distribution(0, current_expl_targets.size() - 1);
+  target = current_expl_targets[distribution(random_engine)];
+  return true;
 }
 
-bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool roi_target, double minSensorRange, double maxSensorRange)
+bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool target_roi, double minSensorRange, double maxSensorRange)
 {
-  octomap::point3d origin = roi_target ? getRandomRoiTarget() : getRandomExplTarget();
+  octomap::point3d origin;
+  bool sample_target_success = false;
+  bool is_roi_targeted = false;
+  target_vector_mtx.lock_shared();
+  if (target_roi)
+  {
+    sample_target_success = getRandomRoiTarget(origin);
+    if (sample_target_success)
+      is_roi_targeted = true;
+  }
+  if (!sample_target_success)
+  {
+    sample_target_success = getRandomExplTarget(origin);
+  }
+  if (!sample_target_success)
+  {
+    target_vector_mtx.unlock_shared();
+    return false;
+  }
+  target_vector_mtx.unlock_shared();
   octomap::point3d end = sampleRandomViewpoint(origin, minSensorRange, maxSensorRange, random_engine);
   octomap::KeyRay ray;
 
@@ -370,6 +401,8 @@ bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool roi_target, double m
   vp.pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
 
   vp.state = robot_manager->getPoseRobotState(vp.pose);
+  vp.is_roi_targeted = is_roi_targeted;
+
   if (vp.state == nullptr)
   {
     tree_mtx.unlock_shared();

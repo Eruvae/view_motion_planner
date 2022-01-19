@@ -25,6 +25,14 @@ public:
 
   void poseVisualizeThread();
 
+  void graphVisualizeThread();
+
+  void graphBuilderThread();
+
+  void pathSearcherThread();
+
+  void pathExecuterThead();
+
   void generateViewposeGraph();
 
   void plannerLoop();
@@ -36,6 +44,7 @@ private:
 
   std::shared_ptr<RobotManager> robot_manager;
   std::shared_ptr<OctreeManager> octree_manager;
+  ViewposeGraphManager graph_manager;
 
   // For visualizing things in rviz
   moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;

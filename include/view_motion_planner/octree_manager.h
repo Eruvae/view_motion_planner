@@ -48,6 +48,7 @@ private:
   size_t old_rois;
   octomap::KeySet encountered_keys;
 
+  boost::shared_mutex target_vector_mtx;
   std::vector<octomap::point3d> current_roi_targets;
   std::vector<octomap::point3d> current_expl_targets;
 
@@ -81,12 +82,12 @@ public:
   std::vector<Viewpose> sampleObservationPoses(double sensorRange=0.5);
 
   void updateRoiTargets();
-  octomap::point3d getRandomRoiTarget();
+  bool getRandomRoiTarget(octomap::point3d &target);
 
   void updateExplTargets();
-  octomap::point3d getRandomExplTarget();
+  bool getRandomExplTarget(octomap::point3d &target);
 
-  bool sampleRandomViewPose(Viewpose &vp, bool roi_target, double minSensorRange, double maxSensorRange);
+  bool sampleRandomViewPose(Viewpose &vp, bool target_roi, double minSensorRange, double maxSensorRange);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 

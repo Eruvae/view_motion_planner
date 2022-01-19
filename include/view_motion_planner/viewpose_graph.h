@@ -15,6 +15,7 @@ struct Viewpose
 {
   moveit::core::RobotStatePtr state;
   geometry_msgs::Pose pose;
+  bool is_roi_targeted;
 };
 
 struct Trajectory
@@ -40,6 +41,8 @@ class ViewposeGraphManager
 private:
   ViewposeGraph graph;
 
+  boost::shared_mutex graph_mtx;
+
   std::shared_ptr<RobotManager> robot_manager;
 
   std::unique_ptr<ompl::NearestNeighbors<Vertex>> neighbor_data;
@@ -49,6 +52,11 @@ private:
 
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager);
+
+  boost::shared_mutex &getGraphMutex()
+  {
+    return graph_mtx;
+  }
 
   const ViewposeGraph& getGraph() const
   {
@@ -60,6 +68,12 @@ public:
     Vertex v = boost::add_vertex(vp, graph);
     neighbor_data->add(v);
     return v;
+  }
+
+  void clear()
+  {
+    graph.clear();
+    neighbor_data->clear();
   }
 
   void connectNeighbors(const Vertex &v, size_t num_neighbors=5, double max_traj_length = 5.0, double traj_step = 0.1);
