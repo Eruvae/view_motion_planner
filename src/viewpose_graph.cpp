@@ -50,7 +50,9 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       continue;
 
     t.traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
+    t.bw_traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
     t.traj->addSuffixWayPoint(from, 0);
+    t.bw_traj->addPrefixWayPoint(from, 1);
     bool found_traj = true;
     if (t.cost > traj_step) // interpolate points
     {
@@ -69,11 +71,14 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
           break;
         }
         t.traj->addSuffixWayPoint(temp_state, frac_step);
+        t.bw_traj->addPrefixWayPoint(temp_state, 1 - frac_step);
       }
     }
     if (found_traj)
     {
       t.traj->addSuffixWayPoint(to, 1);
+      t.bw_traj->addPrefixWayPoint(to, 0);
+
       // TODO: time parameterization
       boost::add_edge(v, nv, t, graph);
     }

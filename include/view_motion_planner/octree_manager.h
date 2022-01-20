@@ -96,6 +96,14 @@ public:
     return observationRegions;
   }
 
+  bool computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, octomap::KeyRay& ray)
+  {
+    tree_mtx.lock_shared();
+    bool ret = planningTree->computeRayKeys(origin, end, ray);
+    tree_mtx.unlock_shared();
+    return ret;
+  }
+
   octomap::point3d transformToMapFrame(const octomap::point3d &p);
   geometry_msgs::Pose transformToMapFrame(const geometry_msgs::Pose &p);
 

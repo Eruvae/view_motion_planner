@@ -20,7 +20,7 @@ struct Viewpose
 
 struct Trajectory
 {
-  robot_trajectory::RobotTrajectoryPtr traj;
+  robot_trajectory::RobotTrajectoryPtr traj, bw_traj;
   double cost;
 };
 

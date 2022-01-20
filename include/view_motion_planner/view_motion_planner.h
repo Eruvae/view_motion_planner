@@ -29,6 +29,13 @@ public:
 
   void graphBuilderThread();
 
+  octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp);
+
+  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &free, octomap::KeySet &occ, octomap::KeySet &unknown);
+
+  void evaluateTrajectoryUtility(const robot_trajectory::RobotTrajectoryPtr &traj, const octomap::KeySet &previouslyObserved, const double &previousUtility,
+                                 octomap::KeySet &observed, double &utility);
+
   void pathSearcherThread();
 
   void pathExecuterThead();
@@ -47,7 +54,8 @@ private:
   ViewposeGraphManager graph_manager;
 
   // For visualizing things in rviz
-  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
+  moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;
+  rviz_visual_tools::RvizVisualToolsPtr vt_graph;
 
   std::vector<Viewpose> observationPoses;
   boost::shared_mutex observationPoseMtx;

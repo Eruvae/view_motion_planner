@@ -134,6 +134,16 @@ moveit::core::RobotStatePtr RobotManager::getJointValueRobotState(const std::vec
   return state;
 }
 
+// TODO: not working
+octomap::pose6d RobotManager::getRobotStatePose(const moveit::core::RobotStatePtr &state)
+{
+  const Eigen::Isometry3d &tf = state->getGlobalLinkTransform(end_effector_link);
+  const auto &t = tf.translation(); const auto &r = Eigen::Quaterniond(tf.rotation());
+  octomap::pose6d pose(octomath::Vector3(t.x(), t.y(), t.z()), octomath::Quaternion(r.w(), r.x(), r.y(), r.z()));
+  return pose;
+}
+
+
 bool RobotManager::isValid(const moveit::core::RobotStatePtr &state)
 {
   // Collision checking

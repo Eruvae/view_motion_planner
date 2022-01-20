@@ -287,11 +287,11 @@ void OctreeManager::updateRoiTargets()
   octomap::KeySet freeNeighbours;
   for (const octomap::OcTreeKey &key : roi)
   {
-    planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_6);
+    planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_18);
   }
   for (const octomap::OcTreeKey &key : freeNeighbours)
   {
-    if (planningTree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
+    if (planningTree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_18))
     {
       new_roi_targets.push_back(planningTree->keyToCoord(key));
     }

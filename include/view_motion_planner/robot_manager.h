@@ -59,9 +59,12 @@ public:
   geometry_msgs::Pose getCurrentPose();
   bool reset();
 
-  // Get robot states
+  // Get robot states / poses
   moveit::core::RobotStatePtr getPoseRobotState(const geometry_msgs::Pose &pose);
   moveit::core::RobotStatePtr getJointValueRobotState(const std::vector<double> &joint_values);
+
+  // TODO: not working
+  octomap::pose6d getRobotStatePose(const moveit::core::RobotStatePtr &state);
 
   // Collision check
   bool isValid(const moveit::core::RobotStatePtr &state);
