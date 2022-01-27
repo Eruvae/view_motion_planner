@@ -1,5 +1,6 @@
 #include "view_motion_planner/viewpose_graph.h"
 
+#include <moveit/trajectory_processing/iterative_spline_parameterization.h>
 //#include <ompl/datastructures/NearestNeighborsFLANN.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 //#include <ompl/datastructures/NearestNeighborsGNATNoThreadSafety.h>
@@ -78,6 +79,11 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
     {
       t.traj->addSuffixWayPoint(to, 1);
       t.bw_traj->addPrefixWayPoint(to, 0);
+
+      trajectory_processing::IterativeSplineParameterization trajectory_processor(false);
+      found_traj = (trajectory_processor.computeTimeStamps(*(t.traj), 1.0, 1.0) && trajectory_processor.computeTimeStamps(*(t.bw_traj), 1.0, 1.0));
+      if (!found_traj)
+        continue;
 
       // TODO: time parameterization
       boost::add_edge(v, nv, t, graph);

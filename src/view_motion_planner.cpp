@@ -117,9 +117,13 @@ void ViewMotionPlanner::generateViewposeGraph()
 
 void ViewMotionPlanner::graphBuilderThread()
 {
+  static const size_t MAX_GRAPH_VERTICES = 10000;
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
   while(ros::ok())
   {
+    if(graph_manager.getGraph().m_vertices.size() > MAX_GRAPH_VERTICES)
+      break;
+
     double target_selector = target_select_dist(random_engine);
     bool target_roi = target_selector < 0.8; // TODO: Make configurable
     Viewpose vp;
@@ -138,20 +142,18 @@ octomap::point3d_collection ViewMotionPlanner::computeVpRaycastEndpoints(const o
 {
   octomap::point3d_collection endpoints;
   const double hfov = 80 * M_PI / 180.0;
-  const size_t x_steps = 8;
-  const size_t y_steps = 6;
+  const double vfov = 60 * M_PI / 180.0;
+  const size_t x_steps = 9;
+  const size_t y_steps = 7;
   const double maxRange = 1.0;
 
-  double f_rec =  2 * tan(hfov / 2) / static_cast<double>(x_steps);
-  double cx = static_cast<double>(x_steps) / 2.0;
-  double cy = static_cast<double>(y_steps) / 2.0;
   for (size_t i = 0; i < x_steps; i++)
   {
+    double ha = -hfov/2 + (i / static_cast<double>(x_steps-1)) * hfov;
     for(size_t j = 0; j < y_steps; j++)
     {
-      double x = (i + 0.5 - cx) * f_rec;
-      double y = (j + 0.5 - cy) * f_rec;
-      octomap::point3d dir(1.0, x, y);
+      double va = -vfov/2 + (j / static_cast<double>(y_steps-1)) * vfov;
+      octomap::point3d dir(1.0, tan(ha), tan(va));
       octomap::point3d end = dir * maxRange;
       endpoints.push_back(vp.transform(end));
     }
@@ -221,8 +223,12 @@ void ViewMotionPlanner::pathSearcherThread()
       moveit::core::RobotStatePtr cur_state = graph_manager.getGraph()[cam_vert].state;
       for (auto [ei, ei_end] = boost::out_edges(cam_vert, graph_manager.getGraph()); ei != ei_end; ei++)
       {
+        graph_manager.getGraphMutex().lock();
         const Trajectory &e = graph_manager.getGraph()[*ei];
         const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == e.traj->getFirstWayPointPtr() ? e.traj : e.bw_traj;
+        robot_manager->executeTrajectory(traj);
+        graph_manager.getGraphMutex().unlock();
+        break;
       }
     }
   }
@@ -237,17 +243,17 @@ void ViewMotionPlanner::plannerLoop()
 {
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
   boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
-  /*std::vector<boost::thread> graphBuilderThreads;
+  std::vector<boost::thread> graphBuilderThreads;
   for (size_t i = 0; i < 8; i++)
   {
     graphBuilderThreads.push_back(boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this))));
   }
   boost::thread pathSearcherThread(boost::bind(&ViewMotionPlanner::pathSearcherThread, this));
-  ros::waitForShutdown();*/
-  for (ros::Rate rate(100); ros::ok(); rate.sleep())
+  ros::waitForShutdown();
+  /*for (ros::Rate rate(100); ros::ok(); rate.sleep())
   {
     plannerLoopOnce();
-  }
+  }*/
 }
 
 bool ViewMotionPlanner::plannerLoopOnce()
