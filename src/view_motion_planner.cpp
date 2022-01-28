@@ -161,33 +161,41 @@ octomap::point3d_collection ViewMotionPlanner::computeVpRaycastEndpoints(const o
   return endpoints;
 }
 
-void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &free, octomap::KeySet &occ, octomap::KeySet &unknown)
+void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
 {
   octomap::pose6d viewpose = robot_manager->getRobotStatePose(state);
   octomap::point3d_collection endpoints = computeVpRaycastEndpoints(viewpose);
   for (const octomap::point3d &end : endpoints)
   {
-    octomap::KeyRay ray;
-    octree_manager->computeRayKeys(viewpose.trans(), end, ray);
+    octree_manager->computeRayCells(viewpose.trans(), end, freeCells, occCells, unkCells);
   }
-}
-
-void ViewMotionPlanner::evaluateTrajectoryUtility(const robot_trajectory::RobotTrajectoryPtr &traj, const octomap::KeySet &previouslyObserved, const double &previousUtility,
-                                                  octomap::KeySet &observed, double &utility)
-{
-
 }
 
 void ViewMotionPlanner::pathSearcherThread()
 {
   struct VisitedVertex
   {
-    VisitedVertex(const Vertex &v) : v(v), utility(0) {}
-    VisitedVertex(const Vertex &v, const double &utility) : v(v), utility(utility) {}
+    VisitedVertex(const Vertex &v, const Viewpose &vp) : v(v), vp(vp), cost(0), utility(0) {}
+    VisitedVertex(const Vertex &v, const Viewpose &vp, const VisitedVertex &pred, double cost) : v(v), vp(vp), cost(pred.cost + cost)
+    {
+      freeCells = pred.freeCells;
+      occCells = pred.occCells;
+      unkCells = pred.unkCells;
+      computeUtility();
+    }
+
+    double computeUtility()
+    {
+      utility = unkCells.size() / cost;
+    }
 
     Vertex v;
+    const Viewpose &vp;
+    double cost;
     double utility;
-    octomap::KeySet observedVoxels;
+    octomap::KeySet freeCells;
+    octomap::KeySet occCells;
+    octomap::KeySet unkCells;
 
     bool operator< (const VisitedVertex &rhs) const
     {
@@ -209,27 +217,32 @@ void ViewMotionPlanner::pathSearcherThread()
     cam_vp.state = robot_manager->getCurrentState();
     cam_vp.pose = robot_manager->getCurrentPose();
     Vertex cam_vert = graph_manager.addViewpose(cam_vp);
+    graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
     graph_manager.getGraphMutex().unlock();
 
-    ValueHeap::handle_type handle = priorityQueue.push(VisitedVertex(cam_vert));
+    ValueHeap::handle_type handle = priorityQueue.push(VisitedVertex(cam_vert, cam_vp));
     openVertices[cam_vert] = handle;
 
     for (ros::Rate rate(1); ros::ok(); rate.sleep())
     {
-      graph_manager.getGraphMutex().lock();
-      graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
-      graph_manager.getGraphMutex().unlock();
+      const VisitedVertex &vert = priorityQueue.top();
+      priorityQueue.pop();
 
-      moveit::core::RobotStatePtr cur_state = graph_manager.getGraph()[cam_vert].state;
-      for (auto [ei, ei_end] = boost::out_edges(cam_vert, graph_manager.getGraph()); ei != ei_end; ei++)
+      graph_manager.getGraphMutex().lock();
+      moveit::core::RobotStatePtr cur_state = vert.vp.state;
+      for (auto [ei, ei_end] = boost::out_edges(vert.v, graph_manager.getGraph()); ei != ei_end; ei++)
       {
-        graph_manager.getGraphMutex().lock();
-        const Trajectory &e = graph_manager.getGraph()[*ei];
-        const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == e.traj->getFirstWayPointPtr() ? e.traj : e.bw_traj;
-        robot_manager->executeTrajectory(traj);
-        graph_manager.getGraphMutex().unlock();
-        break;
+
+        const Trajectory &t = graph_manager.getGraph()[*ei];
+        const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == t.traj->getFirstWayPointPtr() ? t.traj : t.bw_traj;
+
+        const Viewpose &target = graph_manager.getGraph()[ei->m_target];
+        VisitedVertex target_vert(ei->m_target, target, vert, t.cost);
+        computeStateObservedVoxels(target.state, target_vert.freeCells, target_vert.occCells, target_vert.unkCells);
+        ValueHeap::handle_type handle = priorityQueue.push(target_vert);
+        //robot_manager->executeTrajectory(traj);
       }
+      graph_manager.getGraphMutex().unlock();
     }
   }
 }

@@ -53,7 +53,7 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
     t.traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
     t.bw_traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
     t.traj->addSuffixWayPoint(from, 0);
-    t.bw_traj->addPrefixWayPoint(from, 1);
+    t.bw_traj->addPrefixWayPoint(from, 0);
     bool found_traj = true;
     if (t.cost > traj_step) // interpolate points
     {
@@ -71,13 +71,13 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
           found_traj = false;
           break;
         }
-        t.traj->addSuffixWayPoint(temp_state, frac_step);
-        t.bw_traj->addPrefixWayPoint(temp_state, 1 - frac_step);
+        t.traj->addSuffixWayPoint(temp_state, 0);
+        t.bw_traj->addPrefixWayPoint(temp_state, 0);
       }
     }
     if (found_traj)
     {
-      t.traj->addSuffixWayPoint(to, 1);
+      t.traj->addSuffixWayPoint(to, 0);
       t.bw_traj->addPrefixWayPoint(to, 0);
 
       trajectory_processing::IterativeSplineParameterization trajectory_processor(false);
@@ -85,8 +85,8 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       if (!found_traj)
         continue;
 
-      // TODO: time parameterization
-      boost::add_edge(v, nv, t, graph);
+      /*auto [edge, success] = */boost::add_edge(v, nv, t, graph);
+      t.cost = std::accumulate(t.traj->getWayPointDurations().begin(), t.traj->getWayPointDurations().end(), 0);
     }
   }
 }

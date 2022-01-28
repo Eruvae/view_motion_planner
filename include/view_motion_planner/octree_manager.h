@@ -104,6 +104,34 @@ public:
     return ret;
   }
 
+  bool computeRayCells(const octomap::point3d& origin, const octomap::point3d& end, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
+  {
+    tree_mtx.lock_shared();
+    octomap::KeyRay ray;
+    bool ret = planningTree->computeRayKeys(origin, end, ray);
+    if (!ret)
+    {
+      tree_mtx.unlock_shared();
+      return ret;
+    }
+    for (const octomap::OcTreeKey &key : ray)
+    {
+      const octomap_vpp::RoiOcTreeNode *node = planningTree->search(key);
+      octomap_vpp::NodeState state = planningTree->getNodeState(node, octomap_vpp::NodeProperty::OCCUPANCY);
+      if (state == octomap_vpp::NodeState::FREE_NONROI)
+        freeCells.insert(key);
+      else if (state == octomap_vpp::NodeState::UNKNOWN)
+        unkCells.insert(key);
+      else
+      {
+        occCells.insert(key);
+        break;
+      }
+    }
+    tree_mtx.unlock_shared();
+    return true;
+  }
+
   octomap::point3d transformToMapFrame(const octomap::point3d &p);
   geometry_msgs::Pose transformToMapFrame(const geometry_msgs::Pose &p);
 

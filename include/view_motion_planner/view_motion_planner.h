@@ -31,10 +31,7 @@ public:
 
   octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp);
 
-  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &free, octomap::KeySet &occ, octomap::KeySet &unknown);
-
-  void evaluateTrajectoryUtility(const robot_trajectory::RobotTrajectoryPtr &traj, const octomap::KeySet &previouslyObserved, const double &previousUtility,
-                                 octomap::KeySet &observed, double &utility);
+  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells);
 
   void pathSearcherThread();
 
