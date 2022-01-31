@@ -18,8 +18,8 @@ ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &
 
 double ViewposeGraphManager::getVertexDistancePose(Vertex a, Vertex b)
 {
-  const geometry_msgs::Point &pa = graph[a].pose.position;
-  const geometry_msgs::Point &pb = graph[b].pose.position;
+  const geometry_msgs::Point &pa = graph[a]->pose.position;
+  const geometry_msgs::Point &pb = graph[b]->pose.position;
   double x = pb.x - pa.x;
   double y = pb.y - pa.y;
   double z = pb.z - pa.z;
@@ -28,7 +28,7 @@ double ViewposeGraphManager::getVertexDistancePose(Vertex a, Vertex b)
 
 double ViewposeGraphManager::getVertexDistanceJoints(Vertex a, Vertex b)
 {
-  return graph[a].state->distance(*(graph[b].state), robot_manager->getJointModelGroup());
+  return graph[a]->state->distance(*(graph[b]->state), robot_manager->getJointModelGroup());
 }
 
 void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step)
@@ -42,22 +42,22 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
     if (check_edge.second) // edge already exists
       continue;
 
-    moveit::core::RobotStatePtr from = graph[v].state;
-    moveit::core::RobotStatePtr to = graph[nv].state;
+    moveit::core::RobotStatePtr from = graph[v]->state;
+    moveit::core::RobotStatePtr to = graph[nv]->state;
 
-    Trajectory t;
-    t.cost = from->distance(*to, robot_manager->getJointModelGroup());
-    if (t.cost > max_traj_length) // don't compute trajectory
+    TrajectoryPtr t(new Trajectory());
+    t->cost = from->distance(*to, robot_manager->getJointModelGroup());
+    if (t->cost > max_traj_length) // don't compute trajectory
       continue;
 
-    t.traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
-    t.bw_traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
-    t.traj->addSuffixWayPoint(from, 0);
-    t.bw_traj->addPrefixWayPoint(from, 0);
+    t->traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
+    t->bw_traj.reset(new robot_trajectory::RobotTrajectory(robot_manager->getRobotModel(), robot_manager->getJointModelGroup()));
+    t->traj->addSuffixWayPoint(from, 0);
+    t->bw_traj->addPrefixWayPoint(from, 0);
     bool found_traj = true;
-    if (t.cost > traj_step) // interpolate points
+    if (t->cost > traj_step) // interpolate points
     {
-      size_t num_steps = static_cast<size_t>(t.cost / traj_step);
+      size_t num_steps = static_cast<size_t>(t->cost / traj_step);
       double frac_step = 1.0 / num_steps;
       for (size_t i = 1; i < num_steps; i++) // don't check first and last state (assume valid)
       {
@@ -71,22 +71,22 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
           found_traj = false;
           break;
         }
-        t.traj->addSuffixWayPoint(temp_state, 0);
-        t.bw_traj->addPrefixWayPoint(temp_state, 0);
+        t->traj->addSuffixWayPoint(temp_state, 0);
+        t->bw_traj->addPrefixWayPoint(temp_state, 0);
       }
     }
     if (found_traj)
     {
-      t.traj->addSuffixWayPoint(to, 0);
-      t.bw_traj->addPrefixWayPoint(to, 0);
+      t->traj->addSuffixWayPoint(to, 0);
+      t->bw_traj->addPrefixWayPoint(to, 0);
 
       trajectory_processing::IterativeSplineParameterization trajectory_processor(false);
-      found_traj = (trajectory_processor.computeTimeStamps(*(t.traj), 1.0, 1.0) && trajectory_processor.computeTimeStamps(*(t.bw_traj), 1.0, 1.0));
+      found_traj = (trajectory_processor.computeTimeStamps(*(t->traj), 1.0, 1.0) && trajectory_processor.computeTimeStamps(*(t->bw_traj), 1.0, 1.0));
       if (!found_traj)
         continue;
 
       /*auto [edge, success] = */boost::add_edge(v, nv, t, graph);
-      t.cost = std::accumulate(t.traj->getWayPointDurations().begin(), t.traj->getWayPointDurations().end(), 0);
+      t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
     }
   }
 }

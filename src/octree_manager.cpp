@@ -209,10 +209,10 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
   publishMap();
 }
 
-std::vector<Viewpose> OctreeManager::sampleObservationPoses(double sensorRange)
+std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRange)
 {
   ros::Time startTime(ros::Time::now());
-  std::vector<Viewpose> observationPoses;
+  std::vector<ViewposePtr> observationPoses;
   boost::mutex obsVpMtx;
 
   tree_mtx.lock_shared();
@@ -252,13 +252,13 @@ std::vector<Viewpose> OctreeManager::sampleObservationPoses(double sensorRange)
         if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
           return;
 
-        Viewpose vp;
+        ViewposePtr vp(new Viewpose());
 
-        vp.pose.position = octomap::pointOctomapToMsg(end);
-        vp.pose.orientation = tf2::toMsg(getQuatInDir(-direction));
+        vp->pose.position = octomap::pointOctomapToMsg(end);
+        vp->pose.orientation = tf2::toMsg(getQuatInDir(-direction));
 
-        vp.state = robot_manager->getPoseRobotState(vp.pose);
-        if (vp.state == nullptr)
+        vp->state = robot_manager->getPoseRobotState(vp->pose);
+        if (vp->state == nullptr)
           return;
 
         /* std::vector<double> joint_values = robot_manager->getPoseJointValues(pose);
@@ -354,7 +354,7 @@ bool OctreeManager::getRandomExplTarget(octomap::point3d &target)
   return true;
 }
 
-bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool target_roi, double minSensorRange, double maxSensorRange)
+ViewposePtr OctreeManager::sampleRandomViewPose(bool target_roi, double minSensorRange, double maxSensorRange)
 {
   octomap::point3d origin;
   bool sample_target_success = false;
@@ -373,7 +373,7 @@ bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool target_roi, double m
   if (!sample_target_success)
   {
     target_vector_mtx.unlock_shared();
-    return false;
+    return nullptr;
   }
   target_vector_mtx.unlock_shared();
   octomap::point3d end = sampleRandomViewpoint(origin, minSensorRange, maxSensorRange, random_engine);
@@ -388,28 +388,30 @@ bool OctreeManager::sampleRandomViewPose(Viewpose &vp, bool target_roi, double m
     if (node && planningTree->isNodeOccupied(node))
     {
       tree_mtx.unlock_shared();
-      return false;
+      return nullptr;
     }
   }
   if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
   {
     tree_mtx.unlock_shared();
-    return false;
+    return nullptr;
   }
 
-  vp.pose.position = octomap::pointOctomapToMsg(end);
-  vp.pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
+  ViewposePtr vp(new Viewpose());
 
-  vp.state = robot_manager->getPoseRobotState(vp.pose);
-  vp.is_roi_targeted = is_roi_targeted;
+  vp->pose.position = octomap::pointOctomapToMsg(end);
+  vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
 
-  if (vp.state == nullptr)
+  vp->state = robot_manager->getPoseRobotState(vp->pose);
+  vp->is_roi_targeted = is_roi_targeted;
+
+  if (vp->state == nullptr)
   {
     tree_mtx.unlock_shared();
-    return false;
+    return nullptr;
   }
   tree_mtx.unlock_shared();
-  return true;
+  return vp;
 }
 
 /*
@@ -694,13 +696,13 @@ void OctreeManager::publishObservationPoints(const octomap::KeySet &keys)
   observatonPointsPub.publish(pc);
 }
 
-void OctreeManager::publishObservationPoints(const std::vector<Viewpose> &vps)
+void OctreeManager::publishObservationPoints(const std::vector<ViewposePtr> &vps)
 {
   pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>());
   pc->reserve(vps.size());
-  for (const Viewpose &vp : vps)
+  for (const ViewposePtr &vp : vps)
   {
-    pc->push_back(pcl::PointXYZ(vp.pose.position.x, vp.pose.position.y, vp.pose.position.z));
+    pc->push_back(pcl::PointXYZ(vp->pose.position.x, vp->pose.position.y, vp->pose.position.z));
   }
   pc->header.frame_id = map_frame;
   pcl_conversions::toPCL(ros::Time::now(), pc->header.stamp);

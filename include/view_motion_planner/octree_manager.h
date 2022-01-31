@@ -13,8 +13,8 @@
 #include <roi_viewpoint_planner/evaluator.h>
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
+#include "view_motion_planner/viewpose.h"
 #include <moveit_visual_tools/moveit_visual_tools.h>
-#include "view_motion_planner/viewpose_graph.h"
 
 namespace view_motion_planner
 {
@@ -79,7 +79,7 @@ public:
                 const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
                 std::default_random_engine &random_engine, bool initialize_evaluator=false);
 
-  std::vector<Viewpose> sampleObservationPoses(double sensorRange=0.5);
+  std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
 
   void updateRoiTargets();
   bool getRandomRoiTarget(octomap::point3d &target);
@@ -87,7 +87,7 @@ public:
   void updateExplTargets();
   bool getRandomExplTarget(octomap::point3d &target);
 
-  bool sampleRandomViewPose(Viewpose &vp, bool target_roi, double minSensorRange, double maxSensorRange);
+  ViewposePtr sampleRandomViewPose(bool target_roi, double minSensorRange, double maxSensorRange);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 
@@ -132,6 +132,15 @@ public:
     return true;
   }
 
+  void computePoseObservedCells(const octomap::pose6d &pose, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
+  {
+    octomap::point3d_collection endpoints = computeVpRaycastEndpoints(pose);
+    for (const octomap::point3d &end : endpoints)
+    {
+      computeRayCells(pose.trans(), end, freeCells, occCells, unkCells);
+    }
+  }
+
   octomap::point3d transformToMapFrame(const octomap::point3d &p);
   geometry_msgs::Pose transformToMapFrame(const geometry_msgs::Pose &p);
 
@@ -149,7 +158,7 @@ public:
   void publishMap();
   void publishObservationRegions();
   void publishObservationPoints(const octomap::KeySet &keys);
-  void publishObservationPoints(const std::vector<Viewpose> &vps);
+  void publishObservationPoints(const std::vector<ViewposePtr> &vps);
 
   bool startEvaluator();
   void setEvaluatorStartParams();

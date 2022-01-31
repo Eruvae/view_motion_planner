@@ -90,4 +90,27 @@ static inline tf2::Quaternion getQuatInDir(const octomath::Vector3 &dirVec)
   return quat;
 }
 
+static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp)
+{
+  octomap::point3d_collection endpoints;
+  const double hfov = 80 * M_PI / 180.0;
+  const double vfov = 60 * M_PI / 180.0;
+  const size_t x_steps = 9;
+  const size_t y_steps = 7;
+  const double maxRange = 1.0;
+
+  for (size_t i = 0; i < x_steps; i++)
+  {
+    double ha = -hfov/2 + (i / static_cast<double>(x_steps-1)) * hfov;
+    for(size_t j = 0; j < y_steps; j++)
+    {
+      double va = -vfov/2 + (j / static_cast<double>(y_steps-1)) * vfov;
+      octomap::point3d dir(1.0, tan(ha), tan(va));
+      octomap::point3d end = dir * maxRange;
+      endpoints.push_back(vp.transform(end));
+    }
+  }
+  return endpoints;
+}
+
 } // namespace view_motion_planner

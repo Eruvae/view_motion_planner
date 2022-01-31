@@ -8,6 +8,7 @@
 
 #include "view_motion_planner/octree_manager.h"
 #include "view_motion_planner/robot_manager.h"
+#include "view_motion_planner/viewpose_graph.h"
 
 namespace view_motion_planner
 {
@@ -28,8 +29,6 @@ public:
   void graphVisualizeThread();
 
   void graphBuilderThread();
-
-  octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp);
 
   void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells);
 
@@ -54,7 +53,7 @@ private:
   moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
 
-  std::vector<Viewpose> observationPoses;
+  std::vector<ViewposePtr> observationPoses;
   boost::shared_mutex observationPoseMtx;
 
 };
