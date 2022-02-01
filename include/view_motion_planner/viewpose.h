@@ -24,7 +24,7 @@ struct Viewpose
   geometry_msgs::Pose pose;
   bool is_roi_targeted;
   double accumulated_cost = 0;
-  double accumalated_utility = 0;
+  double accumulated_utility = 0;
   octomap::KeySet freeCells;
   octomap::KeySet occCells;
   octomap::KeySet unkCells;
@@ -47,15 +47,15 @@ struct Viewpose
   {
     if (accumulated_cost == 0)
     {
-      accumalated_utility = 0;
+      accumulated_utility = 0;
       return;
     }
-    accumalated_utility = unkCells.size() / accumulated_cost;
+    accumulated_utility = unkCells.size() / accumulated_cost;
   }
 
   bool operator< (const Viewpose &rhs) const
   {
-    return accumalated_utility < rhs.accumalated_utility;
+    return accumulated_utility < rhs.accumulated_utility;
   }
 };
 

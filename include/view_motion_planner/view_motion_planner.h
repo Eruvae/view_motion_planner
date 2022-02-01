@@ -52,6 +52,7 @@ private:
   // For visualizing things in rviz
   moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
+  rviz_visual_tools::RvizVisualToolsPtr vt_searched_graph;
 
   std::vector<ViewposePtr> observationPoses;
   boost::shared_mutex observationPoseMtx;

@@ -12,7 +12,8 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
     graph_manager(robot_manager),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph"))
+    vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
+    vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph"))
 {
   vt_robot_state->loadMarkerPub(true);
   vt_robot_state->loadRobotStatePub("planned_state");
@@ -144,7 +145,7 @@ void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStat
 
 void ViewMotionPlanner::pathSearcherThread()
 {
-
+  ViewposePathSearcher pathSearcher(graph_manager, octree_manager, vt_searched_graph);
 
   while(ros::ok())
   {
@@ -156,10 +157,19 @@ void ViewMotionPlanner::pathSearcherThread()
     graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
     graph_manager.getGraphMutex().unlock();
 
+    pathSearcher.initStartPose(cam_vert);
+    for (ros::Rate rate(1); ros::ok(); rate.sleep()) // wait for neighbors
+    {
+      if (boost::out_degree(cam_vert, graph_manager.getGraph()) > 0)
+        break;
+
+      graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
+    }
 
     for (ros::Rate rate(1); ros::ok(); rate.sleep())
     {
-
+      pathSearcher.expand();
+      pathSearcher.visualizeGraph();
     }
   }
 }
