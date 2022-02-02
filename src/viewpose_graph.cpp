@@ -80,7 +80,7 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       t->traj->addSuffixWayPoint(to, 0);
       t->bw_traj->addPrefixWayPoint(to, 0);
 
-      trajectory_processing::IterativeSplineParameterization trajectory_processor(false);
+      trajectory_processing::IterativeSplineParameterization trajectory_processor(true);
       found_traj = (trajectory_processor.computeTimeStamps(*(t->traj), 1.0, 1.0) && trajectory_processor.computeTimeStamps(*(t->bw_traj), 1.0, 1.0));
       if (!found_traj)
         continue;

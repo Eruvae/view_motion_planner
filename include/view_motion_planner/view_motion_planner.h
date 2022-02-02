@@ -32,6 +32,8 @@ public:
 
   void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells);
 
+  Vertex initCameraPoseGraph();
+
   void pathSearcherThread();
 
   void pathExecuterThead();
@@ -47,12 +49,14 @@ private:
 
   std::shared_ptr<RobotManager> robot_manager;
   std::shared_ptr<OctreeManager> octree_manager;
-  ViewposeGraphManager graph_manager;
+  std::shared_ptr<ViewposeGraphManager> graph_manager;
 
   // For visualizing things in rviz
   moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
   rviz_visual_tools::RvizVisualToolsPtr vt_searched_graph;
+
+  std::shared_ptr<ViewposePathSearcher> path_searcher;
 
   std::vector<ViewposePtr> observationPoses;
   boost::shared_mutex observationPoseMtx;

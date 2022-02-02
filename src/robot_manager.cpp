@@ -116,7 +116,7 @@ moveit::core::RobotStatePtr RobotManager::getPoseRobotState(const geometry_msgs:
   */
 
   moveit::core::RobotStatePtr state = manipulator_group.getCurrentState();
-  if (!state->setFromIK(jmg, pose, end_effector_link))
+  if (!state || !state->setFromIK(jmg, pose, end_effector_link))
   {
     return nullptr;
   }

@@ -10,10 +10,11 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
   : random_engine(std::random_device{}()),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
-    graph_manager(robot_manager),
+    graph_manager(new ViewposeGraphManager(robot_manager)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
-    vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph"))
+    vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
+    path_searcher(new ViewposePathSearcher(graph_manager, octree_manager, vt_searched_graph))
 {
   vt_robot_state->loadMarkerPub(true);
   vt_robot_state->loadRobotStatePub("planned_state");
@@ -64,23 +65,22 @@ void ViewMotionPlanner::graphVisualizeThread()
 {
   for (ros::Rate rate(1); ros::ok(); rate.sleep())
   {
-    graph_manager.getGraphMutex().lock_shared();
+    boost::shared_lock lock(graph_manager->getGraphMutex());
     ROS_INFO_STREAM("Computing connected components");
     ros::Time startTime = ros::Time::now();
     using VPCMap = std::unordered_map<Vertex, size_t>;
     using VPCPropertyMap = boost::associative_property_map<VPCMap>;
     VPCMap component_map;
     VPCPropertyMap component_property_map(component_map);
-    size_t num = boost::connected_components(graph_manager.getGraph(), component_property_map);
+    size_t num = boost::connected_components(graph_manager->getGraph(), component_property_map);
     ROS_INFO_STREAM("Computing connected components took " << (ros::Time::now() - startTime) << ", " << num << " components");
     startTime = ros::Time::now();
     vt_graph->deleteAllMarkers();
-    for (auto [ei, ei_end] = boost::edges(graph_manager.getGraph()); ei != ei_end; ei++)
+    for (auto [ei, ei_end] = boost::edges(graph_manager->getGraph()); ei != ei_end; ei++)
     {
-      vt_graph->publishLine(graph_manager.getGraph()[ei->m_source]->pose.position, graph_manager.getGraph()[ei->m_target]->pose.position, rviz_visual_tools::RvizVisualTools::intToRvizColor(component_map[ei->m_source] % 15));
-      // visual_tools_->publishTrajectoryLine(graph_manager.getGraph()[*ei].traj, robot_manager->getJointModelGroup(), visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
+      vt_graph->publishLine(graph_manager->getGraph()[ei->m_source]->pose.position, graph_manager->getGraph()[ei->m_target]->pose.position, rviz_visual_tools::RvizVisualTools::intToRvizColor(component_map[ei->m_source] % 15));
+      // visual_tools_->publishTrajectoryLine(graph_manager->getGraph()[*ei].traj, robot_manager->getJointModelGroup(), visual_tools_->intToRvizColor(component_map[ei->m_source] % 15));
     }
-    graph_manager.getGraphMutex().unlock_shared();
     vt_graph->trigger();
     ROS_INFO_STREAM("Viewpose graph published, took " << (ros::Time::now() - startTime));
   }
@@ -92,25 +92,24 @@ void ViewMotionPlanner::generateViewposeGraph()
   std::vector<ViewposePtr> vps = observationPoses;
   observationPoseMtx.unlock_shared();
 
-  graph_manager.getGraphMutex().lock();
-  graph_manager.clear();
+  boost::unique_lock lock(graph_manager->getGraphMutex());
+  graph_manager->clear();
 
   ROS_INFO_STREAM("Generating viewpose graph");
   ros::Time startTime(ros::Time::now());
   for (const ViewposePtr &vp : vps)
   {
-    graph_manager.addViewpose(vp);
+    graph_manager->addViewpose(vp);
   }
-  for (auto [vi, vi_end] = boost::vertices(graph_manager.getGraph()); vi != vi_end; vi++)
+  for (auto [vi, vi_end] = boost::vertices(graph_manager->getGraph()); vi != vi_end; vi++)
   {
-    graph_manager.connectNeighbors(*vi, 5, DBL_MAX);
+    graph_manager->connectNeighbors(*vi, 5, DBL_MAX);
   }
   ViewposePtr cam_vp(new Viewpose());
   cam_vp->state = robot_manager->getCurrentState();
   cam_vp->pose = robot_manager->getCurrentPose();
-  Vertex cam_vert = graph_manager.addViewpose(cam_vp);
-  graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
-  graph_manager.getGraphMutex().unlock();
+  Vertex cam_vert = graph_manager->addViewpose(cam_vp);
+  graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
 
   ROS_INFO_STREAM("Generating graph took " << (ros::Time::now() - startTime) << ", " << vps.size() << " poses inserted");
 }
@@ -121,7 +120,7 @@ void ViewMotionPlanner::graphBuilderThread()
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
   while(ros::ok())
   {
-    if(graph_manager.getGraph().m_vertices.size() > MAX_GRAPH_VERTICES)
+    if(graph_manager->getGraph().m_vertices.size() > MAX_GRAPH_VERTICES)
       break;
 
     double target_selector = target_select_dist(random_engine);
@@ -129,10 +128,9 @@ void ViewMotionPlanner::graphBuilderThread()
     ViewposePtr vp = octree_manager->sampleRandomViewPose(target_roi, 0.3, 0.5); // TODO: Make configurable
     if (vp)
     {
-      graph_manager.getGraphMutex().lock();
-      Vertex v = graph_manager.addViewpose(vp);
-      graph_manager.connectNeighbors(v, 5, 2.0); // TODO: Make configurable
-      graph_manager.getGraphMutex().unlock();
+      boost::unique_lock lock(graph_manager->getGraphMutex());
+      Vertex v = graph_manager->addViewpose(vp);
+      graph_manager->connectNeighbors(v, 5, 2.0); // TODO: Make configurable
     }
   }
 }
@@ -143,33 +141,38 @@ void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStat
   octree_manager->computePoseObservedCells(viewpose, freeCells, occCells, unkCells);
 }
 
+Vertex ViewMotionPlanner::initCameraPoseGraph()
+{
+  boost::unique_lock lock(graph_manager->getGraphMutex());
+  ViewposePtr cam_vp(new Viewpose());
+  cam_vp->state = robot_manager->getCurrentState();
+  cam_vp->pose = robot_manager->getCurrentPose();
+  Vertex cam_vert = graph_manager->addViewpose(cam_vp);
+  return cam_vert;
+}
+
 void ViewMotionPlanner::pathSearcherThread()
 {
-  ViewposePathSearcher pathSearcher(graph_manager, octree_manager, vt_searched_graph);
-
   while(ros::ok())
   {
-    graph_manager.getGraphMutex().lock();
-    ViewposePtr cam_vp(new Viewpose());
-    cam_vp->state = robot_manager->getCurrentState();
-    cam_vp->pose = robot_manager->getCurrentPose();
-    Vertex cam_vert = graph_manager.addViewpose(cam_vp);
-    graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
-    graph_manager.getGraphMutex().unlock();
-
-    pathSearcher.initStartPose(cam_vert);
+    ros::Duration(10).sleep();
+    Vertex cam_vert = initCameraPoseGraph();
+    path_searcher->initStartPose(cam_vert);
     for (ros::Rate rate(1); ros::ok(); rate.sleep()) // wait for neighbors
     {
-      if (boost::out_degree(cam_vert, graph_manager.getGraph()) > 0)
+      boost::unique_lock lock(graph_manager->getGraphMutex());
+      graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
+      size_t num_out_edges = boost::out_degree(cam_vert, graph_manager->getGraph());
+      ROS_INFO_STREAM("Number of out edges from cam: " << num_out_edges);
+      if (num_out_edges > 0)
         break;
-
-      graph_manager.connectNeighbors(cam_vert, 5, DBL_MAX);
     }
 
     for (ros::Rate rate(1); ros::ok(); rate.sleep())
     {
-      pathSearcher.expand();
-      pathSearcher.visualizeGraph();
+      bool success = path_searcher->expand();
+      ROS_INFO_STREAM("Expand graph: " << success);
+      path_searcher->visualizeGraph();
     }
   }
 }
@@ -184,7 +187,7 @@ void ViewMotionPlanner::plannerLoop()
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
   boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
   std::vector<boost::thread> graphBuilderThreads;
-  for (size_t i = 0; i < 8; i++)
+  for (size_t i = 0; i < 4; i++)
   {
     graphBuilderThreads.push_back(boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this))));
   }
