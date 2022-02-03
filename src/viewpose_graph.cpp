@@ -10,8 +10,18 @@
 namespace view_motion_planner
 {
 
-ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager)
-  : robot_manager(robot_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>())
+bool VertexUtilityComp::operator() (const Vertex &v1, const Vertex &v2) const
+{
+  const ViewposePtr &vp1 = graph_manager->getGraph()[v1];
+  const ViewposePtr &vp2 = graph_manager->getGraph()[v2];
+  return vp1->accumulated_cost < vp2->accumulated_cost;
+}
+
+ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
+                                           const std::shared_ptr<OctreeManager> &octree_manager,
+                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph)
+  : robot_manager(robot_manager), octree_manager(octree_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>()),
+    vt_searched_graph(vt_searched_graph), priorityQueue(VertexUtilityComp(this))
 {
   neighbor_data->setDistanceFunction(boost::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, _1, _2));
 }
@@ -89,6 +99,110 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
     }
   }
+}
+
+void ViewposeGraphManager::visualizeGraph()
+{
+  ROS_INFO_STREAM("Visualizing searched graph");
+  vt_searched_graph->deleteAllMarkers();
+  boost::shared_lock lock(graph_mtx);
+  std::queue<Vertex> toVisualizeQueue;
+  std::unordered_set<ViewposePtr> bestUtilityPoses;
+  std::unordered_set<Vertex> visualizedSet;
+  toVisualizeQueue.push(current_start_vertex);
+  ROS_INFO_STREAM("Computing highest utility path");
+  for (ViewposePtr vp = highest_ig_pose; vp != nullptr; vp=vp->pred)
+  {
+    bestUtilityPoses.insert(vp);
+  }
+  while(!toVisualizeQueue.empty())
+  {
+    ROS_INFO_STREAM("Visualize queue: " << toVisualizeQueue.size());
+    Vertex v = toVisualizeQueue.front();
+    toVisualizeQueue.pop();
+    visualizedSet.insert(v);
+    ViewposePtr vp = graph[v];
+    for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
+    {
+      ViewposePtr target = graph[ei->m_target];
+      if (visualizedSet.find(ei->m_target) != visualizedSet.end()) // already visualized
+        continue;
+
+      rviz_visual_tools::colors line_color = rviz_visual_tools::DEFAULT;
+      if (bestUtilityPoses.find(target) != bestUtilityPoses.end()) // is on best utility path
+        line_color = rviz_visual_tools::CYAN;
+      else if (target->pred != nullptr) // has been expanded
+        line_color = rviz_visual_tools::DARK_GREY;
+      else // not yet expanded
+        line_color = rviz_visual_tools::GREY;
+
+      vt_searched_graph->publishLine(graph[ei->m_source]->pose.position, graph[ei->m_target]->pose.position, line_color);
+      toVisualizeQueue.push(ei->m_target);
+    }
+  }
+  ROS_INFO_STREAM("Visualization done");
+  vt_searched_graph->trigger();
+}
+
+void ViewposeGraphManager::initStartPose(const Vertex &v)
+{
+  current_start_vertex = v;
+  //ValueHeap::handle_type handle =
+  priorityQueue.push(v);
+}
+
+bool ViewposeGraphManager::expand()
+{
+  if (priorityQueue.empty())
+    return false;
+
+  boost::unique_lock lock(graph_mtx);
+
+  Vertex v = priorityQueue.top();
+  ViewposePtr vp = graph[v];
+  priorityQueue.pop();
+
+  moveit::core::RobotStatePtr cur_state = vp->state;
+  for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
+  {
+
+    TrajectoryPtr t = graph[*ei];
+    //const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
+
+    ViewposePtr target = graph[ei->m_target];
+    if (target->pred || ei->m_target == current_start_vertex) // already visited before
+    {
+      // TODO: check if improved path
+      continue;
+    }
+    target->addPredecessor(vp, t);
+    octree_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
+    target->computeUtility();
+    if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)
+    {
+      highest_ig_pose = target;
+    }
+    //ValueHeap::handle_type handle =
+    priorityQueue.push(ei->m_target);
+    //robot_manager->executeTrajectory(traj);
+  }
+  return true;
+}
+
+const robot_trajectory::RobotTrajectoryPtr ViewposeGraphManager::getNextTrajectory()
+{
+  boost::shared_lock lock(graph_mtx);
+  ViewposePtr vp = highest_ig_pose;
+  if (vp)
+  {
+    while(vp->pred && vp->pred->pred != nullptr)
+    {
+      vp = vp->pred;
+    }
+  }
+  TrajectoryPtr t = vp->pred_edge;
+  robot_trajectory::RobotTrajectoryPtr traj = vp->pred->state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
+  return traj;
 }
 
 } // namespace view_motion_planner

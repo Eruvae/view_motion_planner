@@ -11,7 +11,7 @@ namespace view_motion_planner
 {
 
 using moveit::planning_interface::MoveGroupInterface;
-using moveit::planning_interface::MoveItErrorCode;
+using moveit::core::MoveItErrorCode;
 
 class RobotManager
 {

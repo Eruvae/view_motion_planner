@@ -8,13 +8,12 @@ namespace view_motion_planner
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                   const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator)
   : random_engine(std::random_device{}()),
-    robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
-    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
-    graph_manager(new ViewposeGraphManager(robot_manager)),
-    vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
-    path_searcher(new ViewposePathSearcher(graph_manager, octree_manager, vt_searched_graph))
+    robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
+    vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
+    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph))
 {
   vt_robot_state->loadMarkerPub(true);
   vt_robot_state->loadRobotStatePub("planned_state");
@@ -153,28 +152,28 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
 
 void ViewMotionPlanner::pathSearcherThread()
 {
-  while(ros::ok())
+  ros::Duration(10).sleep();
+  Vertex cam_vert = initCameraPoseGraph();
+  graph_manager->initStartPose(cam_vert);
+  for (ros::Rate rate(1); ros::ok(); rate.sleep()) // wait for neighbors
   {
-    ros::Duration(10).sleep();
-    Vertex cam_vert = initCameraPoseGraph();
-    path_searcher->initStartPose(cam_vert);
-    for (ros::Rate rate(1); ros::ok(); rate.sleep()) // wait for neighbors
-    {
-      boost::unique_lock lock(graph_manager->getGraphMutex());
-      graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
-      size_t num_out_edges = boost::out_degree(cam_vert, graph_manager->getGraph());
-      ROS_INFO_STREAM("Number of out edges from cam: " << num_out_edges);
-      if (num_out_edges > 0)
-        break;
-    }
-
-    for (ros::Rate rate(1); ros::ok(); rate.sleep())
-    {
-      bool success = path_searcher->expand();
-      ROS_INFO_STREAM("Expand graph: " << success);
-      path_searcher->visualizeGraph();
-    }
+    boost::unique_lock lock(graph_manager->getGraphMutex());
+    graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
+    size_t num_out_edges = boost::out_degree(cam_vert, graph_manager->getGraph());
+    ROS_INFO_STREAM("Number of out edges from cam: " << num_out_edges);
+    if (num_out_edges > 0)
+      break;
   }
+
+  ros::Time start_expand(ros::Time::now());
+  for (ros::Rate rate(5); ros::ok() && (ros::Time::now() - start_expand).toSec() < 10; rate.sleep())
+  {
+    bool success = graph_manager->expand();
+    ROS_INFO_STREAM("Expand graph: " << success);
+    graph_manager->visualizeGraph();
+  }
+  robot_trajectory::RobotTrajectoryPtr traj = graph_manager->getNextTrajectory();
+  robot_manager->executeTrajectory(traj);
 }
 
 void ViewMotionPlanner::pathExecuterThead()

@@ -235,7 +235,8 @@ bool RobotManager::executeTrajectory(const robot_trajectory::RobotTrajectoryPtr 
 {
   moveit_msgs::RobotTrajectory msg;
   traj->getRobotTrajectoryMsg(msg);
-  manipulator_group.execute(msg);
+  MoveItErrorCode error = manipulator_group.execute(msg);
+  return error == MoveItErrorCode::SUCCESS;
 }
 
 } // namespace view_motion_planner
