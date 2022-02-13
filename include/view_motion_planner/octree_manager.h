@@ -21,7 +21,9 @@ namespace view_motion_planner
 
 class OctreeManager
 {
-private:  
+private:
+  ros::NodeHandle &nh;
+
   std::shared_ptr<RobotManager> robot_manager;
 
   std::default_random_engine &random_engine;
@@ -66,7 +68,7 @@ private:
   double eval_accumulatedPlanLength;
   std::string eval_lastStep;
 
-  void registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event);
+  void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
 public:
   // Constructor to store own tree, subscribe to pointcloud roi
@@ -80,6 +82,8 @@ public:
                 std::default_random_engine &random_engine, bool initialize_evaluator=false);
 
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
+
+  void waitForPointcloudWithRoi();
 
   void updateRoiTargets();
   bool getRandomRoiTarget(octomap::point3d &target);

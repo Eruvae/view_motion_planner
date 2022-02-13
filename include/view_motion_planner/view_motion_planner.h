@@ -44,6 +44,11 @@ public:
 
   bool plannerLoopOnce(); // returns true if moved
 
+  RobotManager* getRobotManager()
+  {
+    return robot_manager.get();
+  }
+
 private:
   std::default_random_engine random_engine;
 

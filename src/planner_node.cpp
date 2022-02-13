@@ -32,5 +32,16 @@ int main(int argc, char **argv)
   tf2_ros::TransformListener tfListener(tfBuffer);
 
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, evaluate_results);
+
+  std::vector<double> joint_start_values;
+  if(nh.getParam("/roi_viewpoint_planner/initial_joint_values", joint_start_values))
+  {
+    planner.getRobotManager()->moveToState(joint_start_values);
+  }
+  else
+  {
+    ROS_WARN("No inital joint values set");
+  }
+
   planner.plannerLoop();
 }

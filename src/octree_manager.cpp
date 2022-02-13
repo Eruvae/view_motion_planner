@@ -1,4 +1,5 @@
 #include "view_motion_planner/octree_manager.h"
+#include <ros/topic.h>
 #include <octomap_msgs/conversions.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/range/counting_range.hpp>
@@ -17,7 +18,8 @@ namespace view_motion_planner
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                              const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
                              std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs, bool initialize_evaluator) :
-  robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
+  nh(nh), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
+  planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
   stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
@@ -31,7 +33,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   samplingTreePub = nh.advertise<octomap_msgs::Octomap>("sampling_tree", 1, true);
   observationRegionsPub = nh.advertise<octomap_msgs::Octomap>("observation_regions", 1);
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
-  roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
+  //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
   // Load workspace
 
@@ -145,7 +147,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
               const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
                              std::default_random_engine &random_engine, bool initialize_evaluator) :
-  random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
+  nh(nh), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
 {
   /*if (initialize_evaluator)
@@ -158,24 +160,22 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   }*/
 }
 
-void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event)
+void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg)
 {
-  const pointcloud_roi_msgs::PointcloudWithRoi &roi = *event.getMessage();
-
   geometry_msgs::TransformStamped pcFrameTf;
-  bool cloud_in_map_frame = (roi.cloud.header.frame_id == map_frame);
+  bool cloud_in_map_frame = (msg->cloud.header.frame_id == map_frame);
   if (cloud_in_map_frame)
   {
     //ROS_INFO_STREAM("Incoming cloud already in target frame");
     //pcFrameTf.header = roi.cloud.header;
-    pcFrameTf.transform = roi.transform;
+    pcFrameTf.transform = msg->transform;
   }
   else
   {
     //ROS_INFO_STREAM("Convert incoming cloud (" << roi.cloud.header.frame_id << ") to map frame (" << map_frame << "), assuming no transform in incoming data");
     try
     {
-      pcFrameTf = tfBuffer.lookupTransform(map_frame, roi.cloud.header.frame_id, roi.cloud.header.stamp);
+      pcFrameTf = tfBuffer.lookupTransform(map_frame, msg->cloud.header.frame_id, msg->cloud.header.stamp);
     }
     catch (const tf2::TransformException &e)
     {
@@ -189,9 +189,9 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
 
   octomap::Pointcloud inlierCloud, outlierCloud, fullCloud;
   if (cloud_in_map_frame)
-    octomap_vpp::pointCloud2ToOctomapByIndices(roi.cloud, roi.roi_indices, inlierCloud, outlierCloud, fullCloud);
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
   else
-    octomap_vpp::pointCloud2ToOctomapByIndices(roi.cloud, roi.roi_indices, pcFrameTf.transform, inlierCloud, outlierCloud, fullCloud);
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, pcFrameTf.transform, inlierCloud, outlierCloud, fullCloud);
 
   tree_mtx.lock();
   ros::Time insertStartTime(ros::Time::now());
@@ -207,6 +207,17 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
   ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
   tree_mtx.unlock();
   publishMap();
+}
+
+void OctreeManager::waitForPointcloudWithRoi()
+{
+  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh, ros::Duration());
+  if (!msg)
+  {
+    ROS_WARN_STREAM("Pointcloud message not received");
+    return;
+  }
+  registerPointcloudWithRoi(msg);
 }
 
 std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRange)

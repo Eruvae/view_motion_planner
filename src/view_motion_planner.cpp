@@ -174,6 +174,7 @@ void ViewMotionPlanner::pathSearcherThread()
   }
   robot_trajectory::RobotTrajectoryPtr traj = graph_manager->getNextTrajectory();
   robot_manager->executeTrajectory(traj);
+  octree_manager->waitForPointcloudWithRoi();
 }
 
 void ViewMotionPlanner::pathExecuterThead()
@@ -183,6 +184,7 @@ void ViewMotionPlanner::pathExecuterThead()
 
 void ViewMotionPlanner::plannerLoop()
 {
+  octree_manager->waitForPointcloudWithRoi();
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
   boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
   std::vector<boost::thread> graphBuilderThreads;
