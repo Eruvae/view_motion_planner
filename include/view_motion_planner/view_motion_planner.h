@@ -16,6 +16,32 @@ namespace view_motion_planner
 using moveit::planning_interface::MoveGroupInterface;
 using moveit::planning_interface::MoveItErrorCode;
 
+class PauseCondition
+{
+  bool is_paused = false;
+  boost::mutex pause_mutex;
+  boost::condition_variable pause_change;
+
+public:
+  void wait()
+  {
+      boost::unique_lock<boost::mutex> lock(pause_mutex);
+      while(is_paused)
+      {
+          pause_change.wait(lock);
+      }
+  }
+
+  void setPaused(bool new_value)
+  {
+      {
+          boost::unique_lock<boost::mutex> lock(pause_mutex);
+          is_paused = new_value;
+      }
+      pause_change.notify_all();
+  }
+};
+
 class ViewMotionPlanner
 {
 public:
@@ -39,6 +65,12 @@ public:
   void pathExecuterThead();
 
   void generateViewposeGraph();
+
+  void initGraphBuilderThreads();
+
+  void pauseGraphBuilderThreads();
+
+  void resumeGraphBuilderThreads();
 
   void plannerLoop();
 
@@ -64,6 +96,12 @@ private:
   std::vector<ViewposePtr> observationPoses;
   boost::shared_mutex observationPoseMtx;
 
+  bool graph_building_paused = false;
+  boost::shared_mutex graph_building_pause_mutex;
+  boost::condition_variable graph_building_pause_change;
+
+  std::array<boost::thread, 4> graphBuilderThreads;
+  PauseCondition graphBuilderPaused;
 };
 
 } // namespace view_motion_planner

@@ -121,7 +121,7 @@ moveit::core::RobotStatePtr RobotManager::getPoseRobotState(const geometry_msgs:
     return nullptr;
   }
 
-  if (!isValid(state))
+  if (!isValidState(state))
     return nullptr;
 
   return state;
@@ -144,7 +144,7 @@ octomap::pose6d RobotManager::getRobotStatePose(const moveit::core::RobotStatePt
 }
 
 
-bool RobotManager::isValid(const moveit::core::RobotStatePtr &state)
+bool RobotManager::isValidState(const moveit::core::RobotStatePtr &state)
 {
   // Collision checking
   collision_detection::CollisionRequest req;
@@ -152,6 +152,15 @@ bool RobotManager::isValid(const moveit::core::RobotStatePtr &state)
   planning_scene_monitor::LockedPlanningSceneRO scene(psm);
   scene->checkCollision(req, res, *state);
   return !res.collision;
+}
+
+bool RobotManager::isValidTrajectory(const robot_trajectory::RobotTrajectoryPtr &traj)
+{
+  for (size_t i = 0; i < traj->getWayPointCount(); i++)
+  {
+    if (!isValidState(traj->getWayPointPtr(i))) return false;
+  }
+  return true;
 }
 
 std::vector<double> RobotManager::getPoseJointValues(const geometry_msgs::Pose &pose)

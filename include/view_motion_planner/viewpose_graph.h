@@ -46,6 +46,8 @@ private:
 
   boost::shared_mutex graph_mtx;
 
+  std::unordered_map<ViewposePtr, Vertex> vertex_map;
+
   std::shared_ptr<RobotManager> robot_manager;
   std::shared_ptr<OctreeManager> octree_manager;
 
@@ -57,6 +59,8 @@ private:
 
   typedef boost::heap::fibonacci_heap<Vertex, boost::heap::compare<VertexUtilityComp>> ValueHeap;
   typedef std::unordered_map<Vertex, ValueHeap::handle_type> VertexHandleMap;
+  std::unordered_set<Vertex> visited_vertices;
+  size_t current_start_vertex_number;
 
   ValueHeap priorityQueue;
 
@@ -87,6 +91,7 @@ public:
   {
     Vertex v = boost::add_vertex(vp, graph);
     neighbor_data->add(v);
+    vertex_map[vp] = v;
     return v;
   }
 
@@ -102,9 +107,11 @@ public:
 
   void initStartPose(const Vertex &v);
 
+  void cleanupAfterMove (const Vertex &new_start_vertex);
+
   bool expand();
 
-  const robot_trajectory::RobotTrajectoryPtr getNextTrajectory();
+  const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> getNextTrajectory();
 
 };
 

@@ -119,7 +119,9 @@ void ViewMotionPlanner::graphBuilderThread()
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
   while(ros::ok())
   {
-    if(graph_manager->getGraph().m_vertices.size() > MAX_GRAPH_VERTICES)
+    graphBuilderPaused.wait();
+
+    if(boost::num_vertices(graph_manager->getGraph()) > MAX_GRAPH_VERTICES)
       break;
 
     double target_selector = target_select_dist(random_engine);
@@ -165,6 +167,8 @@ void ViewMotionPlanner::pathSearcherThread()
       break;
   }
 
+  pauseGraphBuilderThreads();
+
   ros::Time start_expand(ros::Time::now());
   for (ros::Rate rate(5); ros::ok() && (ros::Time::now() - start_expand).toSec() < 10; rate.sleep())
   {
@@ -172,9 +176,12 @@ void ViewMotionPlanner::pathSearcherThread()
     ROS_INFO_STREAM("Expand graph: " << success);
     graph_manager->visualizeGraph();
   }
-  robot_trajectory::RobotTrajectoryPtr traj = graph_manager->getNextTrajectory();
+  auto [next_vertex, traj] = graph_manager->getNextTrajectory();
   robot_manager->executeTrajectory(traj);
   octree_manager->waitForPointcloudWithRoi();
+
+  graph_manager->cleanupAfterMove(next_vertex);
+  resumeGraphBuilderThreads();
 }
 
 void ViewMotionPlanner::pathExecuterThead()
@@ -182,16 +189,31 @@ void ViewMotionPlanner::pathExecuterThead()
 
 }
 
+void ViewMotionPlanner::initGraphBuilderThreads()
+{
+  for (boost::thread &t : graphBuilderThreads)
+  {
+    t = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this)));
+  }
+}
+
+void ViewMotionPlanner::pauseGraphBuilderThreads()
+{
+  graphBuilderPaused.setPaused(true);
+}
+
+void ViewMotionPlanner::resumeGraphBuilderThreads()
+{
+  graphBuilderPaused.setPaused(false);
+}
+
 void ViewMotionPlanner::plannerLoop()
 {
   octree_manager->waitForPointcloudWithRoi();
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
   boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
-  std::vector<boost::thread> graphBuilderThreads;
-  for (size_t i = 0; i < 4; i++)
-  {
-    graphBuilderThreads.push_back(boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this))));
-  }
+
+  initGraphBuilderThreads();
   boost::thread pathSearcherThread(boost::bind(&ViewMotionPlanner::pathSearcherThread, this));
   ros::waitForShutdown();
   /*for (ros::Rate rate(100); ros::ok(); rate.sleep())

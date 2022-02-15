@@ -21,7 +21,7 @@ ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &
                                            const std::shared_ptr<OctreeManager> &octree_manager,
                                            const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph)
   : robot_manager(robot_manager), octree_manager(octree_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>()),
-    vt_searched_graph(vt_searched_graph), priorityQueue(VertexUtilityComp(this))
+    vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this))
 {
   neighbor_data->setDistanceFunction(boost::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, _1, _2));
 }
@@ -75,7 +75,7 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
         from->interpolate(*to, i * frac_step, *temp_state, robot_manager->getJointModelGroup());
         temp_state->update();
 
-        bool state_valid = robot_manager->isValid(temp_state);
+        bool state_valid = robot_manager->isValidState(temp_state);
         if (!state_valid) // don't add edge
         {
           found_traj = false;
@@ -97,6 +97,7 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
 
       /*auto [edge, success] = */boost::add_edge(v, nv, t, graph);
       t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
+      t->last_collision_check_start_vertex = current_start_vertex_number;
     }
   }
 }
@@ -125,11 +126,11 @@ void ViewposeGraphManager::visualizeGraph()
     for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
     {
       ViewposePtr target = graph[ei->m_target];
-      if (visualizedSet.find(ei->m_target) != visualizedSet.end()) // already visualized
+      if (visualizedSet.count(ei->m_target) > 0) // already visualized
         continue;
 
       rviz_visual_tools::colors line_color = rviz_visual_tools::DEFAULT;
-      if (bestUtilityPoses.find(target) != bestUtilityPoses.end()) // is on best utility path
+      if (bestUtilityPoses.count(target) > 0) // is on best utility path
         line_color = rviz_visual_tools::CYAN;
       else if (target->pred != nullptr) // has been expanded
         line_color = rviz_visual_tools::DARK_GREY;
@@ -151,6 +152,14 @@ void ViewposeGraphManager::initStartPose(const Vertex &v)
   priorityQueue.push(v);
 }
 
+void ViewposeGraphManager::cleanupAfterMove (const Vertex &new_start_vertex)
+{
+  visited_vertices.insert(current_start_vertex);
+  priorityQueue.clear();
+  current_start_vertex = new_start_vertex;
+  current_start_vertex_number++;
+}
+
 bool ViewposeGraphManager::expand()
 {
   if (priorityQueue.empty())
@@ -163,14 +172,28 @@ bool ViewposeGraphManager::expand()
   priorityQueue.pop();
 
   moveit::core::RobotStatePtr cur_state = vp->state;
+  std::vector<Edge> edges_to_remove;
   for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
   {
 
     TrajectoryPtr t = graph[*ei];
-    //const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
+    if (t->last_collision_check_start_vertex != current_start_vertex_number) // last collision check performed before move
+    {
+      const robot_trajectory::RobotTrajectoryPtr &traj = cur_state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
+      if (!robot_manager->isValidTrajectory(traj))
+      {
+        edges_to_remove.push_back(*ei);
+        continue;
+      }
+      t->last_collision_check_start_vertex = current_start_vertex_number;
+    }
 
     ViewposePtr target = graph[ei->m_target];
-    if (target->pred || ei->m_target == current_start_vertex) // already visited before
+    if (ei->m_target == current_start_vertex || visited_vertices.count(ei->m_target) > 0) // not a valid vertex to visit
+    {
+      continue;
+    }
+    if (target->pred) // already visited before
     {
       // TODO: check if improved path
       continue;
@@ -184,12 +207,15 @@ bool ViewposeGraphManager::expand()
     }
     //ValueHeap::handle_type handle =
     priorityQueue.push(ei->m_target);
-    //robot_manager->executeTrajectory(traj);
+  }
+  for (const Edge &e : edges_to_remove)
+  {
+    boost::remove_edge(e, graph);
   }
   return true;
 }
 
-const robot_trajectory::RobotTrajectoryPtr ViewposeGraphManager::getNextTrajectory()
+const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::getNextTrajectory()
 {
   boost::shared_lock lock(graph_mtx);
   ViewposePtr vp = highest_ig_pose;
@@ -202,7 +228,7 @@ const robot_trajectory::RobotTrajectoryPtr ViewposeGraphManager::getNextTrajecto
   }
   TrajectoryPtr t = vp->pred_edge;
   robot_trajectory::RobotTrajectoryPtr traj = vp->pred->state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
-  return traj;
+  return {vertex_map[vp], traj};
 }
 
 } // namespace view_motion_planner

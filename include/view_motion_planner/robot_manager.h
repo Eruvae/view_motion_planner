@@ -67,7 +67,8 @@ public:
   octomap::pose6d getRobotStatePose(const moveit::core::RobotStatePtr &state);
 
   // Collision check
-  bool isValid(const moveit::core::RobotStatePtr &state);
+  bool isValidState(const moveit::core::RobotStatePtr &state);
+  bool isValidTrajectory(const robot_trajectory::RobotTrajectoryPtr &traj);
 
   // Get joint configurations
   std::vector<double> getPoseJointValues(const geometry_msgs::Pose &pose);

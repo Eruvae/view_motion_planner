@@ -16,6 +16,7 @@ struct Trajectory
 {
   robot_trajectory::RobotTrajectoryPtr traj, bw_traj;
   double cost;
+  size_t last_collision_check_start_vertex; // Start vertex when last collision check was performed
 };
 
 struct Viewpose
