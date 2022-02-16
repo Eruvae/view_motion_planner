@@ -18,8 +18,9 @@ RobotManager::RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const
     end_effector_link(ee_link_name)
 {
   manipulator_group.setPoseReferenceFrame(pose_reference_frame);
-  psm->startWorldGeometryMonitor();
-  psm->startSceneMonitor();
+  //psm->startWorldGeometryMonitor();
+  psm->startStateMonitor("/joint_states");
+  psm->startSceneMonitor("/move_group/monitored_planning_scene");
 
   start_values_set = nh.getParam("/roi_viewpoint_planner/initial_joint_values", joint_start_values);
 

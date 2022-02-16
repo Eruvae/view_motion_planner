@@ -64,7 +64,7 @@ public:
 
   void pathExecuterThead();
 
-  void generateViewposeGraph();
+  //void generateViewposeGraph();
 
   void initGraphBuilderThreads();
 
@@ -74,7 +74,7 @@ public:
 
   void plannerLoop();
 
-  bool plannerLoopOnce(); // returns true if moved
+  //bool plannerLoopOnce(); // returns true if moved
 
   RobotManager* getRobotManager()
   {

@@ -109,11 +109,20 @@ public:
 
   void initStartPose(const Vertex &v);
 
-  void cleanupAfterMove (const Vertex &new_start_vertex);
+  void markAsVisited(const Vertex &v);
+
+  void cleanupAfterMove ();
 
   bool expand();
 
-  const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> getNextTrajectory();
+  Vertex getCurrentStartVertex()
+  {
+    return current_start_vertex;
+  }
+
+  std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> getNextTrajectory();
+
+  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> getNextTrajectories(double cost_limit);
 
 };
 

@@ -1,6 +1,6 @@
 #include "view_motion_planner/viewpose_graph.h"
 
-#include <moveit/trajectory_processing/iterative_spline_parameterization.h>
+#include <moveit/trajectory_processing/time_optimal_trajectory_generation.h>
 //#include <ompl/datastructures/NearestNeighborsFLANN.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 //#include <ompl/datastructures/NearestNeighborsGNATNoThreadSafety.h>
@@ -90,13 +90,16 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       t->traj->addSuffixWayPoint(to, 0);
       t->bw_traj->addPrefixWayPoint(to, 0);
 
-      trajectory_processing::IterativeSplineParameterization trajectory_processor(true);
+      trajectory_processing::TimeOptimalTrajectoryGeneration trajectory_processor;
       found_traj = (trajectory_processor.computeTimeStamps(*(t->traj), 1.0, 1.0) && trajectory_processor.computeTimeStamps(*(t->bw_traj), 1.0, 1.0));
       if (!found_traj)
         continue;
 
+      t->traj_start_state = from;
+      t->bw_traj_start_state = to;
+
       /*auto [edge, success] = */boost::add_edge(v, nv, t, graph);
-      t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
+      //t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
       t->last_collision_check_start_vertex = current_start_vertex_number;
     }
   }
@@ -111,14 +114,14 @@ void ViewposeGraphManager::visualizeGraph()
   std::unordered_set<ViewposePtr> bestUtilityPoses;
   std::unordered_set<Vertex> visualizedSet;
   toVisualizeQueue.push(current_start_vertex);
-  ROS_INFO_STREAM("Computing highest utility path");
+  //ROS_INFO_STREAM("Computing highest utility path");
   for (ViewposePtr vp = highest_ig_pose; vp != nullptr; vp=vp->pred)
   {
     bestUtilityPoses.insert(vp);
   }
   while(!toVisualizeQueue.empty())
   {
-    ROS_INFO_STREAM("Visualize queue: " << toVisualizeQueue.size());
+    //ROS_INFO_STREAM("Visualize queue: " << toVisualizeQueue.size());
     Vertex v = toVisualizeQueue.front();
     toVisualizeQueue.pop();
     visualizedSet.insert(v);
@@ -130,7 +133,9 @@ void ViewposeGraphManager::visualizeGraph()
         continue;
 
       rviz_visual_tools::colors line_color = rviz_visual_tools::DEFAULT;
-      if (bestUtilityPoses.count(target) > 0) // is on best utility path
+      if (visited_vertices.count(ei->m_source) > 0) // has already been visited
+        line_color = rviz_visual_tools::BLACK;
+      else if (bestUtilityPoses.count(target) > 0) // is on best utility path
         line_color = rviz_visual_tools::CYAN;
       else if (target->pred != nullptr) // has been expanded
         line_color = rviz_visual_tools::DARK_GREY;
@@ -148,26 +153,27 @@ void ViewposeGraphManager::visualizeGraph()
 void ViewposeGraphManager::initStartPose(const Vertex &v)
 {
   current_start_vertex = v;
+  current_start_vertex_number++;
   priorityQueue.push(v);
   expanded_vertices.insert(v);
 }
 
-void ViewposeGraphManager::cleanupAfterMove(const Vertex &new_start_vertex)
+void ViewposeGraphManager::markAsVisited(const Vertex &v)
+{
+  visited_vertices.insert(v);
+}
+
+void ViewposeGraphManager::cleanupAfterMove()
 {
   boost::unique_lock lock(graph_mtx);
-  visited_vertices.insert(current_start_vertex);
+  markAsVisited(current_start_vertex);
   priorityQueue.clear();
-  current_start_vertex = new_start_vertex;
-  current_start_vertex_number++;
   for (const Vertex &v : expanded_vertices)
   {
     if (graph[v])
       graph[v]->clearPredecessor();
   }
   expanded_vertices.clear();
-  current_start_vertex = new_start_vertex;
-  priorityQueue.push(new_start_vertex);
-  expanded_vertices.insert(new_start_vertex);
 }
 
 bool ViewposeGraphManager::expand()
@@ -230,10 +236,10 @@ bool ViewposeGraphManager::expand()
   return true;
 }
 
-const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::getNextTrajectory()
+std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::getNextTrajectory()
 {
   boost::shared_lock lock(graph_mtx);
-  ViewposePtr vp = highest_ig_pose;
+  ViewposePtr vp = highest_util_pose;
   if (vp)
   {
     while(vp->pred && vp->pred->pred != nullptr)
@@ -241,13 +247,29 @@ const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphMana
       vp = vp->pred;
     }
   }
-  TrajectoryPtr t = vp->pred_edge;
-  if (!t)
-  {
-    return {vertex_map[vp], nullptr};
-  }
-  robot_trajectory::RobotTrajectoryPtr traj = vp->pred->state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
+  robot_trajectory::RobotTrajectoryPtr traj = getTrajectoryForState(vp->pred_edge, vp->pred);
   return {vertex_map[vp], traj};
+}
+
+std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> ViewposeGraphManager::getNextTrajectories(double cost_limit)
+{
+  boost::shared_lock lock(graph_mtx);
+  ViewposePtr vp = highest_util_pose;
+  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> next_trajectories;
+  if (vp)
+  {
+    while(vp->pred && vp->pred->pred != nullptr)
+    {
+      if (vp->accumulated_cost < cost_limit)
+      {
+        next_trajectories.push_back({vertex_map[vp], getTrajectoryForState(vp->pred_edge, vp->pred)});
+      }
+      vp = vp->pred;
+    }
+    next_trajectories.push_back({vertex_map[vp], getTrajectoryForState(vp->pred_edge, vp->pred)});
+  }
+  std::reverse(next_trajectories.begin(), next_trajectories.end());
+  return next_trajectories;
 }
 
 } // namespace view_motion_planner
