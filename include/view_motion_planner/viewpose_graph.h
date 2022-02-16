@@ -55,11 +55,13 @@ private:
 
   Vertex current_start_vertex;
   ViewposePtr highest_ig_pose = nullptr;
+  ViewposePtr highest_util_pose = nullptr;
   rviz_visual_tools::RvizVisualToolsPtr vt_searched_graph;
 
   typedef boost::heap::fibonacci_heap<Vertex, boost::heap::compare<VertexUtilityComp>> ValueHeap;
   typedef std::unordered_map<Vertex, ValueHeap::handle_type> VertexHandleMap;
   std::unordered_set<Vertex> visited_vertices;
+  std::unordered_set<Vertex> expanded_vertices;
   size_t current_start_vertex_number;
 
   ValueHeap priorityQueue;

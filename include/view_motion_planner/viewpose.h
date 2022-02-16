@@ -45,6 +45,16 @@ struct Viewpose
     this->accumulated_cost = pred->accumulated_cost + pred_edge->cost;
   }
 
+  void clearPredecessor()
+  {
+    this->pred = nullptr;
+    this->pred_edge = nullptr;
+
+    freeCells.clear();
+    occCells.clear();
+    unkCells.clear();
+  }
+
   void computeUtility()
   {
     accumulated_infogain = unkCells.size();

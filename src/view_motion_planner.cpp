@@ -154,10 +154,14 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
 
 void ViewMotionPlanner::pathSearcherThread()
 {
-  ros::Duration(10).sleep();
+  const double GRAPH_BUILDING_TIME = 2;
+  const double GRAPH_SEARCH_TIME = 2;
+
   Vertex cam_vert = initCameraPoseGraph();
   graph_manager->initStartPose(cam_vert);
-  for (ros::Rate rate(1); ros::ok(); rate.sleep()) // wait for neighbors
+  ros::Duration(GRAPH_BUILDING_TIME).sleep();
+
+  for (ros::Rate rate(1); ros::ok(); rate.sleep()) // connect start pose if not connected
   {
     boost::unique_lock lock(graph_manager->getGraphMutex());
     graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
@@ -167,21 +171,35 @@ void ViewMotionPlanner::pathSearcherThread()
       break;
   }
 
-  pauseGraphBuilderThreads();
-
-  ros::Time start_expand(ros::Time::now());
-  for (ros::Rate rate(5); ros::ok() && (ros::Time::now() - start_expand).toSec() < 10; rate.sleep())
+  while (ros::ok())
   {
-    bool success = graph_manager->expand();
-    ROS_INFO_STREAM("Expand graph: " << success);
+    pauseGraphBuilderThreads();
+    ros::Time start_expand(ros::Time::now());
+    while (ros::ok())
+    {
+      bool success = graph_manager->expand();
+      if (!success || (ros::Time::now() - start_expand).toSec() < GRAPH_SEARCH_TIME)
+        break;
+    }
     graph_manager->visualizeGraph();
-  }
-  auto [next_vertex, traj] = graph_manager->getNextTrajectory();
-  robot_manager->executeTrajectory(traj);
-  octree_manager->waitForPointcloudWithRoi();
+    auto [next_vertex, traj] = graph_manager->getNextTrajectory();
+    if (!traj)
+    {
+      ROS_ERROR_STREAM("No trajectory found");
+    }
+    else
+    {
+      robot_manager->executeTrajectory(traj);
+      octree_manager->waitForPointcloudWithRoi();
 
-  graph_manager->cleanupAfterMove(next_vertex);
-  resumeGraphBuilderThreads();
+      graph_manager->cleanupAfterMove(next_vertex);
+      //cam_vert = initCameraPoseGraph();
+      //graph_manager->connectNeighbors(cam_vert, 5, 2.0);
+      //graph_manager->initStartPose(cam_vert);
+    }
+    resumeGraphBuilderThreads();
+    ros::Duration(GRAPH_BUILDING_TIME).sleep();
+  }
 }
 
 void ViewMotionPlanner::pathExecuterThead()
@@ -211,7 +229,7 @@ void ViewMotionPlanner::plannerLoop()
 {
   octree_manager->waitForPointcloudWithRoi();
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
-  boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
+  //boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
 
   initGraphBuilderThreads();
   boost::thread pathSearcherThread(boost::bind(&ViewMotionPlanner::pathSearcherThread, this));

@@ -148,16 +148,26 @@ void ViewposeGraphManager::visualizeGraph()
 void ViewposeGraphManager::initStartPose(const Vertex &v)
 {
   current_start_vertex = v;
-  //ValueHeap::handle_type handle =
   priorityQueue.push(v);
+  expanded_vertices.insert(v);
 }
 
-void ViewposeGraphManager::cleanupAfterMove (const Vertex &new_start_vertex)
+void ViewposeGraphManager::cleanupAfterMove(const Vertex &new_start_vertex)
 {
+  boost::unique_lock lock(graph_mtx);
   visited_vertices.insert(current_start_vertex);
   priorityQueue.clear();
   current_start_vertex = new_start_vertex;
   current_start_vertex_number++;
+  for (const Vertex &v : expanded_vertices)
+  {
+    if (graph[v])
+      graph[v]->clearPredecessor();
+  }
+  expanded_vertices.clear();
+  current_start_vertex = new_start_vertex;
+  priorityQueue.push(new_start_vertex);
+  expanded_vertices.insert(new_start_vertex);
 }
 
 bool ViewposeGraphManager::expand()
@@ -205,8 +215,13 @@ bool ViewposeGraphManager::expand()
     {
       highest_ig_pose = target;
     }
+    if (!highest_util_pose || target->accumulated_utility > highest_util_pose->accumulated_utility)
+    {
+      highest_util_pose = target;
+    }
     //ValueHeap::handle_type handle =
     priorityQueue.push(ei->m_target);
+    expanded_vertices.insert(ei->m_target);
   }
   for (const Edge &e : edges_to_remove)
   {
@@ -227,6 +242,10 @@ const std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphMana
     }
   }
   TrajectoryPtr t = vp->pred_edge;
+  if (!t)
+  {
+    return {vertex_map[vp], nullptr};
+  }
   robot_trajectory::RobotTrajectoryPtr traj = vp->pred->state == t->traj->getFirstWayPointPtr() ? t->traj : t->bw_traj;
   return {vertex_map[vp], traj};
 }
