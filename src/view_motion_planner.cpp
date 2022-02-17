@@ -190,7 +190,7 @@ void ViewMotionPlanner::pathSearcherThread()
       if (!success || (ros::Time::now() - start_expand).toSec() > config.graph_search_time)
         break;
     }
-    graph_manager->visualizeGraph();
+    graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
 
     std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> trajectories = graph_manager->getNextTrajectories(config.execution_cost_limit);
     Vertex next_start_vertex = graph_manager->getCurrentStartVertex();

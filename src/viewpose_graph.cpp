@@ -106,7 +106,7 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
   }
 }
 
-void ViewposeGraphManager::visualizeGraph()
+void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualize_unexpanded)
 {
   ROS_INFO_STREAM("Visualizing searched graph");
   vt_searched_graph->deleteAllMarkers();
@@ -116,10 +116,11 @@ void ViewposeGraphManager::visualizeGraph()
   std::unordered_set<Vertex> visualizedSet;
   toVisualizeQueue.push(current_start_vertex);
   //ROS_INFO_STREAM("Computing highest utility path");
-  for (ViewposePtr vp = highest_ig_pose; vp != nullptr; vp=vp->pred)
+  for (ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose; vp != nullptr; vp=vp->pred)
   {
     bestUtilityPoses.insert(vp);
   }
+  size_t verts_bu = 0, verts_vis = 0, verts_exp = 0, verts_ue = 0;
   while(!toVisualizeQueue.empty())
   {
     //ROS_INFO_STREAM("Visualize queue: " << toVisualizeQueue.size());
@@ -127,27 +128,47 @@ void ViewposeGraphManager::visualizeGraph()
     toVisualizeQueue.pop();
     visualizedSet.insert(v);
     ViewposePtr vp = graph[v];
+    bool on_bu_path = bestUtilityPoses.count(vp) > 0;
     for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
     {
       ViewposePtr target = graph[ei->m_target];
       if (visualizedSet.count(ei->m_target) > 0) // already visualized
         continue;
 
+      bool visualize = false;
       rviz_visual_tools::colors line_color = rviz_visual_tools::DEFAULT;
-      if (visited_vertices.count(ei->m_source) > 0) // has already been visited
-        line_color = rviz_visual_tools::BLACK;
-      else if (bestUtilityPoses.count(target) > 0) // is on best utility path
+      if (on_bu_path && bestUtilityPoses.count(target) > 0) // is on best utility path
+      {
         line_color = rviz_visual_tools::CYAN;
-      else if (target->pred != nullptr) // has been expanded
+        verts_bu++;
+        visualize = true;
+      }
+      else  if (vp->visited && target->visited) // has already been visited
+      {
+        line_color = rviz_visual_tools::BLACK;
+        verts_vis++;
+        visualize = true;
+      }
+      else if (target->pred != nullptr) // has been expanded from this node
+      {
         line_color = rviz_visual_tools::DARK_GREY;
+        verts_exp++;
+        visualize = visualize_expanded;
+      }
       else // not yet expanded
+      {
         line_color = rviz_visual_tools::GREY;
+        verts_ue++;
+        visualize = visualize_unexpanded;
+      }
 
-      vt_searched_graph->publishLine(graph[ei->m_source]->pose.position, graph[ei->m_target]->pose.position, line_color);
+      if (visualize)
+        vt_searched_graph->publishLine(graph[ei->m_source]->pose.position, graph[ei->m_target]->pose.position, line_color);
+
       toVisualizeQueue.push(ei->m_target);
     }
   }
-  ROS_INFO_STREAM("Visualization done");
+  ROS_INFO_STREAM("Visualization done; " << verts_bu << " bu, " << verts_vis << " vis, " << verts_exp << " exp, " << verts_ue << " ue");
   vt_searched_graph->trigger();
 }
 
@@ -161,7 +182,7 @@ void ViewposeGraphManager::initStartPose(const Vertex &v)
 
 void ViewposeGraphManager::markAsVisited(const Vertex &v)
 {
-  visited_vertices.insert(v);
+  graph[v]->visited = true;
 }
 
 void ViewposeGraphManager::cleanupAfterMove()
@@ -206,17 +227,20 @@ bool ViewposeGraphManager::expand()
     }
 
     ViewposePtr target = graph[ei->m_target];
-    if (ei->m_target == current_start_vertex || visited_vertices.count(ei->m_target) > 0) // not a valid vertex to visit
+    if (ei->m_target == current_start_vertex || target->visited) // not a valid vertex to visit
     {
       continue;
     }
     if (target->pred) // already visited before
     {
-      // TODO: check if improved path
+      //TODO rewire
+      //if (vp->accumulated_infogain > target->pred->accumulated_infogain) // set new predecessor
       continue;
     }
     target->addPredecessor(vp, t);
-    octree_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
+    if (!target->visited) // don't compute new cells for already visited targets
+      octree_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
+
     target->computeUtility(config);
     if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)
     {

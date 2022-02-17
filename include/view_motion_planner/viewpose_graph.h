@@ -63,7 +63,6 @@ private:
 
   typedef boost::heap::fibonacci_heap<Vertex, boost::heap::compare<VertexUtilityComp>> ValueHeap;
   typedef std::unordered_map<Vertex, ValueHeap::handle_type> VertexHandleMap;
-  std::unordered_set<Vertex> visited_vertices;
   std::unordered_set<Vertex> expanded_vertices;
   size_t current_start_vertex_number;
 
@@ -109,7 +108,7 @@ public:
 
   void connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
 
-  void visualizeGraph();
+  void visualizeGraph(bool visualize_expanded, bool visualize_unexpanded);
 
   void initStartPose(const Vertex &v);
 

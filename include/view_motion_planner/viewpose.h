@@ -36,6 +36,7 @@ struct Viewpose
   TrajectoryPtr pred_edge = nullptr;
   size_t target_verts_on_path = 0;
   size_t total_verts_on_path = 0;
+  bool visited = false;
 
   void addPredecessor(ViewposePtr pred, TrajectoryPtr pred_edge)
   {
@@ -46,7 +47,7 @@ struct Viewpose
     occCells = pred->occCells;
     unkCells = pred->unkCells;
 
-    target_verts_on_path = pred->target_verts_on_path + is_roi_targeted ? 1 : 0;
+    target_verts_on_path = pred->target_verts_on_path + (!visited && is_roi_targeted);
     total_verts_on_path = pred->total_verts_on_path + 1;
 
     this->accumulated_cost = pred->accumulated_cost + pred_edge->cost;
