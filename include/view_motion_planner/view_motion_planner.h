@@ -9,6 +9,7 @@
 #include "view_motion_planner/octree_manager.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose_graph.h"
+#include "view_motion_planner/VmpConfig.h"
 
 namespace view_motion_planner
 {
@@ -48,8 +49,6 @@ public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                     const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false);
 
-  MoveGroupInterface::Plan getNextPlan();
-
   void poseVisualizeThread();
 
   void graphVisualizeThread();
@@ -83,6 +82,11 @@ public:
 
 private:
   std::default_random_engine random_engine;
+
+  VmpConfig config;
+  boost::recursive_mutex config_mutex;
+  dynamic_reconfigure::Server<VmpConfig> config_server;
+  void reconfigureCallback(VmpConfig &config, uint32_t level);
 
   // For visualizing things in rviz
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;

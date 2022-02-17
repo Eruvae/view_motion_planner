@@ -19,8 +19,9 @@ bool VertexUtilityComp::operator() (const Vertex &v1, const Vertex &v2) const
 
 ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                                            const std::shared_ptr<OctreeManager> &octree_manager,
-                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph)
-  : robot_manager(robot_manager), octree_manager(octree_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>()),
+                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
+                                           const VmpConfig &config)
+  : config(config), robot_manager(robot_manager), octree_manager(octree_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>()),
     vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this))
 {
   neighbor_data->setDistanceFunction(boost::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, _1, _2));
@@ -216,7 +217,7 @@ bool ViewposeGraphManager::expand()
     }
     target->addPredecessor(vp, t);
     octree_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
-    target->computeUtility();
+    target->computeUtility(config);
     if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)
     {
       highest_ig_pose = target;
@@ -239,7 +240,7 @@ bool ViewposeGraphManager::expand()
 std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::getNextTrajectory()
 {
   boost::shared_lock lock(graph_mtx);
-  ViewposePtr vp = highest_util_pose;
+  ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose;
   if (vp)
   {
     while(vp->pred && vp->pred->pred != nullptr)
@@ -254,7 +255,7 @@ std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::g
 std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> ViewposeGraphManager::getNextTrajectories(double cost_limit)
 {
   boost::shared_lock lock(graph_mtx);
-  ViewposePtr vp = highest_util_pose;
+  ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose;
   std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> next_trajectories;
   if (vp)
   {

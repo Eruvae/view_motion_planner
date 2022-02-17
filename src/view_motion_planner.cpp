@@ -8,23 +8,34 @@ namespace view_motion_planner
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                   const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator)
   : random_engine(std::random_device{}()),
+    config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
-    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph))
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))
 {
+  config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
   vt_robot_state->loadMarkerPub(true);
   vt_robot_state->loadRobotStatePub("planned_state");
   vt_robot_state->setManualSceneUpdating();
 }
 
-MoveGroupInterface::Plan ViewMotionPlanner::getNextPlan()
+void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
 {
-  MoveGroupInterface::Plan plan;
-  //TODO: compute plan
-  return plan;
+  ROS_INFO_STREAM("Reconfigure callback called, level " << level);
+  if (level & (1 << 5)) // minimum sensor range
+  {
+    if (config.sensor_max_range < config.sensor_min_range && !(level & (1 << 6)))
+      config.sensor_max_range = config.sensor_min_range;
+  }
+  if (level & (1 << 6)) // maximum sensor range
+  {
+    if (config.sensor_min_range > config.sensor_max_range)
+      config.sensor_min_range = config.sensor_max_range;
+  }
+  this->config = config;
 }
 
 void ViewMotionPlanner::poseVisualizeThread()
@@ -126,13 +137,13 @@ void ViewMotionPlanner::graphBuilderThread()
     //  break;
 
     double target_selector = target_select_dist(random_engine);
-    bool target_roi = target_selector < 0.8; // TODO: Make configurable
-    ViewposePtr vp = octree_manager->sampleRandomViewPose(target_roi, 0.3, 0.5); // TODO: Make configurable
+    bool target_roi = target_selector < config.roi_target_ratio;
+    ViewposePtr vp = octree_manager->sampleRandomViewPose(target_roi, config.sensor_min_range, config.sensor_max_range);
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
       Vertex v = graph_manager->addViewpose(vp);
-      graph_manager->connectNeighbors(v, 5, 2.0); // TODO: Make configurable
+      graph_manager->connectNeighbors(v, static_cast<size_t>(config.max_nb_connect_count), config.max_nb_connect_dist);
     }
   }
 }
@@ -155,17 +166,14 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
 
 void ViewMotionPlanner::pathSearcherThread()
 {
-  const double GRAPH_BUILDING_TIME = 5;
-  const double GRAPH_SEARCH_TIME = 2;
-
   Vertex cam_vert = initCameraPoseGraph();
   graph_manager->initStartPose(cam_vert);
-  ros::Duration(GRAPH_BUILDING_TIME).sleep();
+  ros::Duration(config.graph_building_time).sleep();
 
   for (ros::Rate rate(1); ros::ok(); rate.sleep()) // connect start pose if not connected
   {
     boost::unique_lock lock(graph_manager->getGraphMutex());
-    graph_manager->connectNeighbors(cam_vert, 5, DBL_MAX);
+    graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
     size_t num_out_edges = boost::out_degree(cam_vert, graph_manager->getGraph());
     ROS_INFO_STREAM("Number of out edges from cam: " << num_out_edges);
     if (num_out_edges > 0)
@@ -179,12 +187,12 @@ void ViewMotionPlanner::pathSearcherThread()
     while (ros::ok())
     {
       bool success = graph_manager->expand();
-      if (!success || (ros::Time::now() - start_expand).toSec() > GRAPH_SEARCH_TIME)
+      if (!success || (ros::Time::now() - start_expand).toSec() > config.graph_search_time)
         break;
     }
     graph_manager->visualizeGraph();
 
-    std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> trajectories = graph_manager->getNextTrajectories(2.0);
+    std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> trajectories = graph_manager->getNextTrajectories(config.execution_cost_limit);
     Vertex next_start_vertex = graph_manager->getCurrentStartVertex();
     bool moved = false;
     ROS_INFO_STREAM("Executing " << trajectories.size() << " trajectories");
@@ -193,6 +201,7 @@ void ViewMotionPlanner::pathSearcherThread()
       if (!traj)
       {
         ROS_WARN_STREAM("No trajectory found");
+        graph_manager->connectNeighbors(next_start_vertex, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
         break;
       }
       else
@@ -213,7 +222,7 @@ void ViewMotionPlanner::pathSearcherThread()
         {
           ROS_WARN_STREAM("Failed to execute trajectory, setting new start pose");
           next_start_vertex = initCameraPoseGraph();
-          graph_manager->connectNeighbors(cam_vert, 5, 2.0);
+          graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
           break;
         }
         else
@@ -228,7 +237,7 @@ void ViewMotionPlanner::pathSearcherThread()
       graph_manager->initStartPose(next_start_vertex);
     }
     resumeGraphBuilderThreads();
-    ros::Duration(GRAPH_BUILDING_TIME).sleep();
+    ros::Duration(config.graph_building_time).sleep();
   }
 }
 

@@ -10,6 +10,7 @@
 #include "view_motion_planner/viewpose.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/octree_manager.h"
+#include "view_motion_planner/VmpConfig.h"
 
 namespace view_motion_planner
 {
@@ -46,6 +47,8 @@ private:
 
   boost::shared_mutex graph_mtx;
 
+  const VmpConfig &config;
+
   std::unordered_map<ViewposePtr, Vertex> vertex_map;
 
   std::shared_ptr<RobotManager> robot_manager;
@@ -72,7 +75,8 @@ private:
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                        const std::shared_ptr<OctreeManager> &octree_manager,
-                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph);
+                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
+                       const VmpConfig &config);
 
   boost::shared_mutex &getGraphMutex()
   {
@@ -103,7 +107,7 @@ public:
     neighbor_data->clear();
   }
 
-  void connectNeighbors(const Vertex &v, size_t num_neighbors=5, double max_traj_length = 5.0, double traj_step = 0.1);
+  void connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
 
   void visualizeGraph();
 

@@ -5,6 +5,7 @@
 #include <moveit/macros/class_forward.h>
 #include <geometry_msgs/Pose.h>
 #include <octomap/OcTreeKey.h>
+#include "view_motion_planner/VmpConfig.h"
 
 namespace view_motion_planner
 {
@@ -61,9 +62,13 @@ struct Viewpose
     unkCells.clear();
   }
 
-  void computeUtility()
+  void computeUtility(const VmpConfig &config)
   {
-    accumulated_infogain = static_cast<double>(unkCells.size());// * static_cast<double>(target_verts_on_path + 1) / static_cast<double>(total_verts_on_path + 1);
+    if (config.ig_type == Vmp_UNK_CELLS_WEIGHTED_TARGET)
+      accumulated_infogain = static_cast<double>(unkCells.size()) * static_cast<double>(target_verts_on_path + 1) / static_cast<double>(total_verts_on_path + 1);
+    else
+      accumulated_infogain = static_cast<double>(unkCells.size());
+
     accumulated_utility = accumulated_cost > 0 ? accumulated_infogain / accumulated_cost : 0;
   }
 };
