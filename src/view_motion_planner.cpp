@@ -13,7 +13,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, initialize_evaluator)),
+    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, initialize_evaluator)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))
 {
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
@@ -25,15 +25,57 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
 void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
 {
   ROS_INFO_STREAM("Reconfigure callback called, level " << level);
+
+  // Adjust sensor range if necessary
   if (level & (1 << 5)) // minimum sensor range
   {
-    if (config.sensor_max_range < config.sensor_min_range && !(level & (1 << 6)))
+    if (config.sensor_max_range < config.sensor_min_range)
       config.sensor_max_range = config.sensor_min_range;
   }
-  if (level & (1 << 6)) // maximum sensor range
+  else if (level & (1 << 6)) // maximum sensor range
   {
     if (config.sensor_min_range > config.sensor_max_range)
       config.sensor_min_range = config.sensor_max_range;
+  }
+
+  // Adjust target ratio if necessary
+  double ratio_diff = 1 - (config.roi_target_ratio + config.expl_target_ratio + config.border_target_ratio);
+  if (ratio_diff != 0.0)
+  {
+    if (level & (1 << 9)) // roi_target_ratio
+    {
+      double other_sum = config.expl_target_ratio + config.border_target_ratio;
+      double expl_diff, border_diff;
+      if (other_sum != 0.0)
+      {
+        expl_diff = ratio_diff * config.expl_target_ratio / other_sum;
+        border_diff = ratio_diff * config.border_target_ratio / other_sum;
+      }
+      else
+      {
+        expl_diff = border_diff = 0.5 * ratio_diff;
+      }
+      config.expl_target_ratio += expl_diff;
+      config.border_target_ratio += border_diff;
+    }
+    else if (level & (1 << 10)) // expl_target_ratio
+    {
+      config.border_target_ratio += ratio_diff;
+      if (config.border_target_ratio < 0)
+      {
+        config.roi_target_ratio += config.border_target_ratio;
+        config.border_target_ratio = 0;
+      }
+    }
+    else if (level & (1 << 11)) // border_target_ratio
+    {
+      config.expl_target_ratio += ratio_diff;
+      if (config.expl_target_ratio < 0)
+      {
+        config.roi_target_ratio += config.expl_target_ratio;
+        config.expl_target_ratio = 0;
+      }
+    }
   }
   this->config = config;
 }
@@ -137,8 +179,15 @@ void ViewMotionPlanner::graphBuilderThread()
     //  break;
 
     double target_selector = target_select_dist(random_engine);
-    bool target_roi = target_selector < config.roi_target_ratio;
-    ViewposePtr vp = octree_manager->sampleRandomViewPose(target_roi, config.sensor_min_range, config.sensor_max_range);
+    TargetType type;
+    if (target_selector <= config.roi_target_ratio)
+      type = TARGET_ROI;
+    else if (target_selector <= config.roi_target_ratio + config.expl_target_ratio)
+      type = TARGET_OCC;
+    else
+      type = TARGET_BORDER;
+
+    ViewposePtr vp = octree_manager->sampleRandomViewPose(type, config.sensor_min_range, config.sensor_max_range);
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());

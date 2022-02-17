@@ -24,6 +24,8 @@ class OctreeManager
 private:
   ros::NodeHandle &nh;
 
+  VmpConfig &config;
+
   std::shared_ptr<RobotManager> robot_manager;
 
   std::default_random_engine &random_engine;
@@ -53,6 +55,7 @@ private:
   boost::shared_mutex target_vector_mtx;
   std::vector<octomap::point3d> current_roi_targets;
   std::vector<octomap::point3d> current_expl_targets;
+  std::vector<octomap::point3d> current_border_targets;
 
   const std::vector<octomath::Vector3> sphere_vecs;
 
@@ -74,12 +77,12 @@ public:
   // Constructor to store own tree, subscribe to pointcloud roi
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
+                std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
 
   // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
                 const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
-                std::default_random_engine &random_engine, bool initialize_evaluator=false);
+                std::default_random_engine &random_engine, VmpConfig &config, bool initialize_evaluator=false);
 
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
 
@@ -90,8 +93,9 @@ public:
 
   void updateExplTargets();
   bool getRandomExplTarget(octomap::point3d &target);
+  bool getRandomBorderTarget(octomap::point3d &target);
 
-  ViewposePtr sampleRandomViewPose(bool target_roi, double minSensorRange, double maxSensorRange);
+  ViewposePtr sampleRandomViewPose(TargetType type, double minSensorRange, double maxSensorRange);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 

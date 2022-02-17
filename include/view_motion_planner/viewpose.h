@@ -13,6 +13,8 @@ namespace view_motion_planner
 MOVEIT_STRUCT_FORWARD(Trajectory);
 MOVEIT_STRUCT_FORWARD(Viewpose);
 
+enum TargetType {TARGET_ROI, TARGET_OCC, TARGET_BORDER};
+
 struct Trajectory
 {
   moveit::core::RobotStatePtr traj_start_state, bw_traj_start_state;
@@ -25,7 +27,7 @@ struct Viewpose
 {
   moveit::core::RobotStatePtr state;
   geometry_msgs::Pose pose;
-  bool is_roi_targeted;
+  TargetType type;
   double accumulated_cost = 0;
   double accumulated_infogain = 0;
   double accumulated_utility = 0;
@@ -47,7 +49,7 @@ struct Viewpose
     occCells = pred->occCells;
     unkCells = pred->unkCells;
 
-    target_verts_on_path = pred->target_verts_on_path + (!visited && is_roi_targeted);
+    target_verts_on_path = pred->target_verts_on_path + (!visited && (type == TARGET_ROI));
     total_verts_on_path = pred->total_verts_on_path + 1;
 
     this->accumulated_cost = pred->accumulated_cost + pred_edge->cost;

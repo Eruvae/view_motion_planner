@@ -17,8 +17,8 @@ namespace view_motion_planner
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                              const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                             std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs, bool initialize_evaluator) :
-  nh(nh), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
+                             std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs, bool initialize_evaluator) :
+  nh(nh), config(config), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
   planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
@@ -146,8 +146,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
               const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
-                             std::default_random_engine &random_engine, bool initialize_evaluator) :
-  nh(nh), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
+                             std::default_random_engine &random_engine, VmpConfig &config, bool initialize_evaluator) :
+  nh(nh), config(config), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
 {
   /*if (initialize_evaluator)
@@ -315,6 +315,7 @@ void OctreeManager::updateRoiTargets()
 void OctreeManager::updateExplTargets()
 {
   std::vector<octomap::point3d> new_expl_targets;
+  std::vector<octomap::point3d> new_border_targets;
   octomap::point3d stMin_tf = transformToMapFrame(stMin), stMax_tf = transformToMapFrame(stMax);
   for (unsigned int i = 0; i < 3; i++)
   {
@@ -329,20 +330,18 @@ void OctreeManager::updateExplTargets()
     }
     if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
     {
-      if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6) &&
-          planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
+      if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
       {
-        new_expl_targets.push_back(it.getCoordinate());
+        if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
+          new_expl_targets.push_back(it.getCoordinate());
+        else
+          new_border_targets.push_back(it.getCoordinate());
       }
     }
   }
 
-  if (new_expl_targets.empty())
-  {
-    // TODO: alternative update
-  }
-
-  current_expl_targets = new_expl_targets;
+  current_expl_targets = std::move(new_expl_targets);
+  current_border_targets = std::move(new_border_targets);
 }
 
 bool OctreeManager::getRandomRoiTarget(octomap::point3d &target)
@@ -365,19 +364,34 @@ bool OctreeManager::getRandomExplTarget(octomap::point3d &target)
   return true;
 }
 
-ViewposePtr OctreeManager::sampleRandomViewPose(bool target_roi, double minSensorRange, double maxSensorRange)
+bool OctreeManager::getRandomBorderTarget(octomap::point3d &target)
+{
+  if (current_border_targets.empty())
+    return false;
+
+  std::uniform_int_distribution<size_t> distribution(0, current_border_targets.size() - 1);
+  target = current_border_targets[distribution(random_engine)];
+  return true;
+}
+
+ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSensorRange, double maxSensorRange)
 {
   octomap::point3d origin;
   bool sample_target_success = false;
-  bool is_roi_targeted = false;
   target_vector_mtx.lock_shared();
-  if (target_roi)
+  if (type == TARGET_ROI)
   {
     sample_target_success = getRandomRoiTarget(origin);
-    if (sample_target_success)
-      is_roi_targeted = true;
+    if (!sample_target_success)
+      type = TARGET_OCC;
   }
-  if (!sample_target_success)
+  if (type == TARGET_OCC)
+  {
+    sample_target_success = getRandomExplTarget(origin);
+    if (!sample_target_success)
+      type = TARGET_BORDER;
+  }
+  if (type == TARGET_BORDER)
   {
     sample_target_success = getRandomExplTarget(origin);
   }
@@ -414,7 +428,7 @@ ViewposePtr OctreeManager::sampleRandomViewPose(bool target_roi, double minSenso
   vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
 
   vp->state = robot_manager->getPoseRobotState(vp->pose);
-  vp->is_roi_targeted = is_roi_targeted;
+  vp->type = type;
 
   if (vp->state == nullptr)
   {
