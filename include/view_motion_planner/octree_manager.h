@@ -39,8 +39,8 @@ private:
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
   std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
   std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
-  boost::shared_mutex own_mtx;
-  boost::shared_mutex &tree_mtx;
+  boost::mutex own_mtx;
+  boost::mutex &tree_mtx;
   const std::string map_frame;
   const std::string ws_frame;
   ros::Publisher octomapPub;
@@ -52,7 +52,7 @@ private:
   size_t old_rois;
   octomap::KeySet encountered_keys;
 
-  boost::shared_mutex target_vector_mtx;
+  boost::mutex target_vector_mtx;
   std::vector<octomap::point3d> current_roi_targets;
   std::vector<octomap::point3d> current_expl_targets;
   std::vector<octomap::point3d> current_border_targets;
@@ -74,15 +74,9 @@ private:
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
 public:
-  // Constructor to store own tree, subscribe to pointcloud roi
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
                 std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
-
-  // Constructor to pass existing tree + mutex, e.g. from viewpoint planner
-  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-                const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
-                std::default_random_engine &random_engine, VmpConfig &config, bool initialize_evaluator=false);
 
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
 
@@ -106,20 +100,20 @@ public:
 
   bool computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, octomap::KeyRay& ray)
   {
-    tree_mtx.lock_shared();
+    tree_mtx.lock();
     bool ret = planningTree->computeRayKeys(origin, end, ray);
-    tree_mtx.unlock_shared();
+    tree_mtx.unlock();
     return ret;
   }
 
   bool computeRayCells(const octomap::point3d& origin, const octomap::point3d& end, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
   {
-    tree_mtx.lock_shared();
+    tree_mtx.lock();
     octomap::KeyRay ray;
     bool ret = planningTree->computeRayKeys(origin, end, ray);
     if (!ret)
     {
-      tree_mtx.unlock_shared();
+      tree_mtx.unlock();
       return ret;
     }
     for (const octomap::OcTreeKey &key : ray)
@@ -136,7 +130,7 @@ public:
         break;
       }
     }
-    tree_mtx.unlock_shared();
+    tree_mtx.unlock();
     return true;
   }
 

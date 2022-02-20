@@ -134,30 +134,14 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
     }
   }
 
-  /*if (initialize_evaluator)
+  if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
     std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
     evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
-  }*/
-}
-
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
-              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::shared_mutex &tree_mtx,
-                             std::default_random_engine &random_engine, VmpConfig &config, bool initialize_evaluator) :
-  nh(nh), config(config), random_engine(random_engine), tfBuffer(tfBuffer), planningTree(providedTree), observationRegions(new octomap_vpp::WorkspaceOcTree(providedTree->getResolution())),
-  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr), map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
-{
-  /*if (initialize_evaluator)
-  {
-    ros::NodeHandle nh_eval("evaluator");
-    std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
-    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
-    eval_trial_num = 0;
-    evaluator->saveGtAsColoredCloud();
-  }*/
+  }
 }
 
 void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg)
@@ -226,7 +210,7 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
   std::vector<ViewposePtr> observationPoses;
   boost::mutex obsVpMtx;
 
-  tree_mtx.lock_shared();
+  tree_mtx.lock();
   octomap::KeySet roiKeys = planningTree->getRoiKeys();
 
   #ifdef RAYCAST_PARALLEL_LOOP
@@ -282,7 +266,7 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
       }
     });
   });
-  tree_mtx.unlock_shared();
+  tree_mtx.unlock();
 
   ROS_INFO_STREAM("Generating observation poses took " << (ros::Time::now() - startTime));
 
@@ -378,7 +362,7 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
 {
   octomap::point3d origin;
   bool sample_target_success = false;
-  target_vector_mtx.lock_shared();
+  target_vector_mtx.lock();
   if (type == TARGET_ROI)
   {
     sample_target_success = getRandomRoiTarget(origin);
@@ -397,14 +381,14 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
   }
   if (!sample_target_success)
   {
-    target_vector_mtx.unlock_shared();
+    target_vector_mtx.unlock();
     return nullptr;
   }
-  target_vector_mtx.unlock_shared();
+  target_vector_mtx.unlock();
   octomap::point3d end = sampleRandomViewpoint(origin, minSensorRange, maxSensorRange, random_engine);
   octomap::KeyRay ray;
 
-  tree_mtx.lock_shared();
+  tree_mtx.lock();
   planningTree->computeRayKeys(origin, end, ray);
   auto rayIt = ray.begin();
   for (auto rayEnd = ray.end(); rayIt != rayEnd; rayIt++)
@@ -412,13 +396,13 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
     octomap_vpp::RoiOcTreeNode *node = planningTree->search(*rayIt);
     if (node && planningTree->isNodeOccupied(node))
     {
-      tree_mtx.unlock_shared();
+      tree_mtx.unlock();
       return nullptr;
     }
   }
   if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
   {
-    tree_mtx.unlock_shared();
+    tree_mtx.unlock();
     return nullptr;
   }
 
@@ -432,10 +416,10 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
 
   if (vp->state == nullptr)
   {
-    tree_mtx.unlock_shared();
+    tree_mtx.unlock();
     return nullptr;
   }
-  tree_mtx.unlock_shared();
+  tree_mtx.unlock();
   return vp;
 }
 
@@ -639,9 +623,9 @@ std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_pre
     fName << "_" << curDateTime;
   }
   fName << ".ot";
-  tree_mtx.lock_shared();
+  tree_mtx.lock();
   bool result = planningTree->write(fName.str());
-  tree_mtx.unlock_shared();
+  tree_mtx.unlock();
   return result ? fName.str() : "";
 }
 
@@ -690,9 +674,9 @@ void OctreeManager::publishMap()
   octomap_msgs::Octomap map_msg;
   map_msg.header.frame_id = map_frame;
   map_msg.header.stamp = ros::Time::now();
-  tree_mtx.lock_shared();
+  tree_mtx.lock();
   bool msg_generated = octomap_msgs::fullMapToMsg(*planningTree, map_msg);
-  tree_mtx.unlock_shared();
+  tree_mtx.unlock();
   if (msg_generated)
   {
     octomapPub.publish(map_msg);
