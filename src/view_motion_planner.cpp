@@ -6,15 +6,18 @@ namespace view_motion_planner
 {
 
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                  const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator)
+                  const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads, bool initialize_evaluator)
   : random_engine(std::random_device{}()),
+    NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
+    evaluation_mode(initialize_evaluator),
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, initialize_evaluator)),
-    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config)),
+    graph_builder_condition(NUM_GRAPH_BUILDER_THREADS)
 {
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
   vt_robot_state->loadMarkerPub(true);
@@ -172,7 +175,7 @@ void ViewMotionPlanner::graphBuilderThread()
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
   while(ros::ok())
   {
-    graphBuilderPaused.wait();
+    graph_builder_condition.wait();
 
     //ROS_INFO_STREAM("Vertices in graph: " << boost::num_vertices(graph_manager->getGraph()));
     //if(boost::num_vertices(graph_manager->getGraph()) > MAX_GRAPH_VERTICES)
@@ -215,6 +218,7 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
 
 void ViewMotionPlanner::pathSearcherThread()
 {
+  resumeGraphBuilderThreads();
   Vertex cam_vert = initCameraPoseGraph();
   graph_manager->initStartPose(cam_vert);
   ros::Duration(config.graph_building_time).sleep();
@@ -297,20 +301,22 @@ void ViewMotionPlanner::pathExecuterThead()
 
 void ViewMotionPlanner::initGraphBuilderThreads()
 {
-  for (boost::thread &t : graphBuilderThreads)
+  graph_builder_threads.reserve(NUM_GRAPH_BUILDER_THREADS);
+  for (size_t i = 0; i < NUM_GRAPH_BUILDER_THREADS; i++)
   {
-    t = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this)));
+    graph_builder_threads.push_back(boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphBuilderThread, this))));
   }
 }
 
 void ViewMotionPlanner::pauseGraphBuilderThreads()
 {
-  graphBuilderPaused.setPaused(true);
+  graph_builder_condition.pause();
+  graph_builder_condition.waitForPause();
 }
 
 void ViewMotionPlanner::resumeGraphBuilderThreads()
 {
-  graphBuilderPaused.setPaused(false);
+  graph_builder_condition.resume();
 }
 
 void ViewMotionPlanner::plannerLoop()

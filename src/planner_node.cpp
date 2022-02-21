@@ -26,12 +26,13 @@ int main(int argc, char **argv)
   bool update_planning_tree = nh.param<bool>("/roi_viewpoint_planner/update_planning_tree", true);
   bool initialize_evaluator = nh.param<bool>("/roi_viewpoint_planner/initialize_evaluator", true);
 
+  size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool evaluate_results = nhp.param<bool>("evaluate_results", false);
 
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, evaluate_results);
+  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads, evaluate_results);
 
   std::vector<double> joint_start_values;
   if(nh.getParam("/roi_viewpoint_planner/initial_joint_values", joint_start_values))

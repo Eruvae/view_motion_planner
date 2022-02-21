@@ -19,35 +19,63 @@ using moveit::planning_interface::MoveItErrorCode;
 
 class PauseCondition
 {
-  bool is_paused = false;
+private:
+  const size_t TOTAL_THREADS;
+  bool is_paused = true;
+  size_t waiting_threads = 0;
   boost::mutex pause_mutex;
-  boost::condition_variable pause_change;
+  boost::condition_variable resume_threads;
+  boost::condition_variable wait_for_pause;
 
 public:
+  PauseCondition(size_t number_of_threads) : TOTAL_THREADS(number_of_threads) {}
+
   void wait()
   {
       boost::unique_lock<boost::mutex> lock(pause_mutex);
+      waiting_threads++;
       while(is_paused)
       {
-          pause_change.wait(lock);
+        if (waiting_threads == TOTAL_THREADS)
+        {
+          wait_for_pause.notify_all();
+        }
+        resume_threads.wait(lock);
       }
+      waiting_threads--;
   }
 
-  void setPaused(bool new_value)
+  void pause()
   {
-      {
-          boost::unique_lock<boost::mutex> lock(pause_mutex);
-          is_paused = new_value;
-      }
-      pause_change.notify_all();
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    is_paused = true;
   }
+
+  void resume()
+  {
+    {
+      boost::unique_lock<boost::mutex> lock(pause_mutex);
+      is_paused = false;
+    }
+    resume_threads.notify_all();
+  }
+
+  void waitForPause()
+  {
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    while (waiting_threads < TOTAL_THREADS)
+    {
+      wait_for_pause.wait(lock);
+    }
+  }
+
 };
 
 class ViewMotionPlanner
 {
 public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator=false);
+                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads, bool initialize_evaluator=false);
 
   void poseVisualizeThread();
 
@@ -83,6 +111,10 @@ public:
 private:
   std::default_random_engine random_engine;
 
+  const size_t NUM_GRAPH_BUILDER_THREADS;
+
+  bool evaluation_mode;
+
   VmpConfig config;
   boost::recursive_mutex config_mutex;
   dynamic_reconfigure::Server<VmpConfig> config_server;
@@ -104,8 +136,8 @@ private:
   boost::shared_mutex graph_building_pause_mutex;
   boost::condition_variable graph_building_pause_change;
 
-  std::array<boost::thread, 4> graphBuilderThreads;
-  PauseCondition graphBuilderPaused;
+  std::vector<boost::thread> graph_builder_threads;
+  PauseCondition graph_builder_condition;
 };
 
 } // namespace view_motion_planner
