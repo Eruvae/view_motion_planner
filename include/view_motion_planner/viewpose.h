@@ -63,6 +63,13 @@ struct Viewpose
     freeCells.clear();
     occCells.clear();
     unkCells.clear();
+
+    accumulated_cost = 0;
+    accumulated_infogain = 0;
+    accumulated_utility = 0;
+
+    target_verts_on_path = 0;
+    total_verts_on_path = 0;
   }
 
   void computeUtility(const VmpConfig &config)

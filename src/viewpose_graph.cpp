@@ -276,22 +276,21 @@ std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> ViewposeGraphManager::g
   return {vertex_map[vp], traj};
 }
 
-std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> ViewposeGraphManager::getNextTrajectories(double cost_limit)
+std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> ViewposeGraphManager::getNextTrajectories(double cost_limit)
 {
   boost::shared_lock lock(graph_mtx);
   ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose;
-  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> next_trajectories;
+  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> next_trajectories;
   if (vp)
   {
-    while(vp->pred && vp->pred->pred != nullptr)
+    while(vp->pred)
     {
-      if (vp->accumulated_cost < cost_limit)
+      if (vp->accumulated_cost < cost_limit || vp->pred->pred == nullptr) // always add at least one trajectory if available
       {
-        next_trajectories.push_back({vertex_map[vp], getTrajectoryForState(vp->pred_edge, vp->pred)});
+        next_trajectories.push_back({vertex_map[vp], getTrajectoryForState(vp->pred_edge, vp->pred), vp->pred_edge->cost});
       }
       vp = vp->pred;
     }
-    next_trajectories.push_back({vertex_map[vp], getTrajectoryForState(vp->pred_edge, vp->pred)});
   }
   std::reverse(next_trajectories.begin(), next_trajectories.end());
   return next_trajectories;

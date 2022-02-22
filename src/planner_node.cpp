@@ -23,8 +23,6 @@ int main(int argc, char **argv)
   std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
-  bool update_planning_tree = nh.param<bool>("/roi_viewpoint_planner/update_planning_tree", true);
-  bool initialize_evaluator = nh.param<bool>("/roi_viewpoint_planner/initialize_evaluator", true);
 
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool evaluate_results = nhp.param<bool>("evaluate_results", false);
@@ -33,16 +31,6 @@ int main(int argc, char **argv)
   tf2_ros::TransformListener tfListener(tfBuffer);
 
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads, evaluate_results);
-
-  std::vector<double> joint_start_values;
-  if(nh.getParam("/roi_viewpoint_planner/initial_joint_values", joint_start_values))
-  {
-    planner.getRobotManager()->moveToState(joint_start_values);
-  }
-  else
-  {
-    ROS_WARN("No inital joint values set");
-  }
-
+  planner.getRobotManager()->moveToHomePose();
   planner.plannerLoop();
 }

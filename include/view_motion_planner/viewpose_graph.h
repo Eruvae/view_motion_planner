@@ -125,7 +125,7 @@ public:
 
   std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr> getNextTrajectory();
 
-  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> getNextTrajectories(double cost_limit);
+  std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> getNextTrajectories(double cost_limit);
 
 };
 

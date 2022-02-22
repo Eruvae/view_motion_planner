@@ -75,7 +75,8 @@ class ViewMotionPlanner
 {
 public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads, bool initialize_evaluator=false);
+                    const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads,
+                    bool evaluation_mode=false, size_t eval_num_episodes=20, double eval_episode_duration=120.0);
 
   void poseVisualizeThread();
 
@@ -87,9 +88,7 @@ public:
 
   Vertex initCameraPoseGraph();
 
-  void pathSearcherThread();
-
-  void pathExecuterThead();
+  void pathSearcherThread(const ros::Time &end_time = ros::TIME_MAX);
 
   //void generateViewposeGraph();
 
@@ -114,6 +113,8 @@ private:
   const size_t NUM_GRAPH_BUILDER_THREADS;
 
   bool evaluation_mode;
+  size_t eval_num_episodes;
+  double eval_episode_duration;
 
   VmpConfig config;
   boost::recursive_mutex config_mutex;

@@ -241,6 +241,12 @@ bool RobotManager::moveToRandomTarget(bool async, const ros::Duration &timeout)
   return success;
 }
 
+bool RobotManager::moveToHomePose(bool async)
+{
+  manipulator_group.setNamedTarget("home");
+  return planAndExecute(async);
+}
+
 bool RobotManager::executeTrajectory(const robot_trajectory::RobotTrajectoryPtr &traj)
 {
   moveit_msgs::RobotTrajectory msg;

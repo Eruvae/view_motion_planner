@@ -6,16 +6,19 @@ namespace view_motion_planner
 {
 
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                  const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads, bool initialize_evaluator)
+                                     const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads,
+                                     bool evaluation_mode, size_t eval_num_episodes, double eval_episode_duration)
   : random_engine(std::random_device{}()),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
-    evaluation_mode(initialize_evaluator),
+    evaluation_mode(evaluation_mode),
+    eval_num_episodes(eval_num_episodes),
+    eval_episode_duration(eval_episode_duration),
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, initialize_evaluator)),
+    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, evaluation_mode)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config)),
     graph_builder_condition(NUM_GRAPH_BUILDER_THREADS)
 {
@@ -216,7 +219,7 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
   return cam_vert;
 }
 
-void ViewMotionPlanner::pathSearcherThread()
+void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
 {
   resumeGraphBuilderThreads();
   Vertex cam_vert = initCameraPoseGraph();
@@ -233,7 +236,7 @@ void ViewMotionPlanner::pathSearcherThread()
       break;
   }
 
-  while (ros::ok())
+  while (ros::ok() && ros::Time::now() < end_time)
   {
     pauseGraphBuilderThreads();
     ros::Time start_expand(ros::Time::now());
@@ -245,11 +248,11 @@ void ViewMotionPlanner::pathSearcherThread()
     }
     graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
 
-    std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr>> trajectories = graph_manager->getNextTrajectories(config.execution_cost_limit);
+    std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> trajectories = graph_manager->getNextTrajectories(config.execution_cost_limit);
     Vertex next_start_vertex = graph_manager->getCurrentStartVertex();
     bool moved = false;
     ROS_INFO_STREAM("Executing " << trajectories.size() << " trajectories");
-    for (const auto &[next_vertex, traj] : trajectories)
+    for (const auto &[next_vertex, traj, cost] : trajectories)
     {
       if (!traj)
       {
@@ -271,6 +274,10 @@ void ViewMotionPlanner::pathSearcherThread()
         moved = true;
         graph_manager->markAsVisited(next_start_vertex);
         octree_manager->waitForPointcloudWithRoi();
+        if (evaluation_mode)
+        {
+          octree_manager->saveEvaluatorData(cost, traj->getDuration());
+        }
         if (!success)
         {
           ROS_WARN_STREAM("Failed to execute trajectory, setting new start pose");
@@ -292,11 +299,6 @@ void ViewMotionPlanner::pathSearcherThread()
     resumeGraphBuilderThreads();
     ros::Duration(config.graph_building_time).sleep();
   }
-}
-
-void ViewMotionPlanner::pathExecuterThead()
-{
-
 }
 
 void ViewMotionPlanner::initGraphBuilderThreads()
@@ -326,8 +328,26 @@ void ViewMotionPlanner::plannerLoop()
   //boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
 
   initGraphBuilderThreads();
-  boost::thread pathSearcherThread(boost::bind(&ViewMotionPlanner::pathSearcherThread, this));
-  ros::waitForShutdown();
+
+  if (evaluation_mode)
+  {
+    ROS_INFO_STREAM("EVALUATION MODE ACTIVATED");
+    octree_manager->startEvaluator();
+    for (size_t current_episode=0; current_episode < eval_num_episodes; current_episode++)
+    {
+      ros::Time end_time = ros::Time::now() + ros::Duration(eval_episode_duration);
+      pathSearcherThread(end_time);
+      pauseGraphBuilderThreads();
+      robot_manager->moveToHomePose();
+      octree_manager->resetOctomap();
+      graph_manager->clear();
+      octree_manager->resetEvaluator();
+    }
+  }
+  else
+  {
+    pathSearcherThread();
+  }
   /*for (ros::Rate rate(100); ros::ok(); rate.sleep())
   {
     plannerLoopOnce();
