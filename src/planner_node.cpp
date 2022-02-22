@@ -25,12 +25,15 @@ int main(int argc, char **argv)
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
-  bool evaluate_results = nhp.param<bool>("evaluate_results", false);
+  bool evaluate_results = nhp.param<bool>("evaluate", false);
+  size_t eval_num_episodes = static_cast<size_t>(nhp.param<int>("episodes", 20));
+  double eval_episode_duration = nhp.param<double>("duration", 120.0);
 
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads, evaluate_results);
+  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads,
+                            evaluate_results, eval_num_episodes, eval_episode_duration);
   planner.getRobotManager()->moveToHomePose();
   planner.plannerLoop();
 }

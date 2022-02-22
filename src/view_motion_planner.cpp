@@ -333,7 +333,7 @@ void ViewMotionPlanner::plannerLoop()
   {
     ROS_INFO_STREAM("EVALUATION MODE ACTIVATED");
     octree_manager->startEvaluator();
-    for (size_t current_episode=0; current_episode < eval_num_episodes; current_episode++)
+    for (size_t current_episode=0; ros::ok() && current_episode < eval_num_episodes; current_episode++)
     {
       ros::Time end_time = ros::Time::now() + ros::Duration(eval_episode_duration);
       pathSearcherThread(end_time);
@@ -341,6 +341,7 @@ void ViewMotionPlanner::plannerLoop()
       robot_manager->moveToHomePose();
       octree_manager->resetOctomap();
       graph_manager->clear();
+      octree_manager->waitForPointcloudWithRoi();
       octree_manager->resetEvaluator();
     }
   }

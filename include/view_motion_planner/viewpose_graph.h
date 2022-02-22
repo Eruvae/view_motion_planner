@@ -102,8 +102,15 @@ public:
 
   void clear()
   {
+    boost::unique_lock lock(graph_mtx);
     graph.clear();
     neighbor_data->clear();
+    highest_ig_pose = nullptr;
+    highest_util_pose = nullptr;
+    vertex_map.clear();
+    expanded_vertices.clear();
+    current_start_vertex_number = 0;
+    priorityQueue.clear();
   }
 
   void connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
@@ -114,7 +121,7 @@ public:
 
   void markAsVisited(const Vertex &v);
 
-  void cleanupAfterMove ();
+  void cleanupAfterMove();
 
   bool expand();
 
