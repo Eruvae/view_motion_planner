@@ -9,8 +9,8 @@
 #include <octomap_vpp/WorkspaceOcTree.h>
 #include <octomap_msgs/Octomap.h>
 #include "octomap_vpp/roioctree_utils.h"
-#include <roi_viewpoint_planner/gt_octree_loader.h>
-#include <roi_viewpoint_planner/evaluator.h>
+#include <rvp_evaluation/gt_octree_loader.h>
+#include <rvp_evaluation/evaluator.h>
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose.h"
@@ -37,8 +37,8 @@ private:
   octomap::point3d wsMin, wsMax;
   octomap::point3d stMin, stMax;
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
-  std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
-  std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
+  std::shared_ptr<rvp_evaluation::GtOctreeLoader> gtLoader;
+  std::unique_ptr<rvp_evaluation::Evaluator> evaluator;
   boost::mutex own_mtx;
   boost::mutex &tree_mtx;
   const std::string map_frame;

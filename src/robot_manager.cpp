@@ -1,6 +1,6 @@
 #include "view_motion_planner/robot_manager.h"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <roi_viewpoint_planner/rvp_utils.h>
+#include <rvp_evaluation/rvp_utils.h>
 
 namespace view_motion_planner
 {
@@ -48,10 +48,10 @@ bool RobotManager::planAndExecute(bool async, double *plan_length, double *traj_
     res = manipulator_group.execute(plan);
 
   if (plan_length)
-    *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+    *plan_length = rvp_evaluation::computeTrajectoryLength(plan);
 
   if (traj_duration)
-    *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
+    *traj_duration = rvp_evaluation::getTrajectoryDuration(plan);
 
   /*if (res != MoveItErrorCode::SUCCESS)
   {
