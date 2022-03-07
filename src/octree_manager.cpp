@@ -35,6 +35,9 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
   //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
+  resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
+  resetVoxbloxMapClient = nh.serviceClient<std_srvs::Empty>("/voxblox_node/clear_map");
+
   // Load workspace
 
   octomap::AbstractOcTree *tree = octomap::AbstractOcTree::read(wstree_file);
@@ -139,6 +142,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
     ros::NodeHandle nh_eval("evaluator");
     std::shared_ptr<rvp_evaluation::ProvidedTreeInterface> interface(new rvp_evaluation::ProvidedTreeInterface(planningTree, tree_mtx));
     evaluator.reset(new rvp_evaluation::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
+    external_cluster_evaluator.reset(new rvp_evaluation::ExternalClusterEvaluator(gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
   }
@@ -658,6 +662,16 @@ void OctreeManager::resetOctomap()
   old_rois = 0;
   tree_mtx.unlock();
   encountered_keys.clear();
+
+  if (!resetMoveitOctomapClient.call(emptySrv))
+  {
+    ROS_ERROR("Failed to reset moveit octomap");
+  }
+  if (!resetVoxbloxMapClient.call(emptySrv))
+  {
+    ROS_WARN("Failed to reset voxblox octomap");
+  }
+
   publishMap();
 }
 
@@ -730,6 +744,7 @@ void OctreeManager::setEvaluatorStartParams()
   std::string file_index_str = std::to_string(eval_trial_num);
   eval_resultsFile = std::ofstream("planner_results_" + file_index_str + ".csv");
   eval_resultsFileOld = std::ofstream("planner_results_old" + file_index_str + ".csv");
+  eval_externalClusterFile = std::ofstream("planner_results_ec" + file_index_str + ".csv");
   eval_fruitCellPercFile = std::ofstream("results_fruit_cells_" + file_index_str + ".csv");
   eval_volumeAccuracyFile = std::ofstream("results_volume_accuracy_" + file_index_str + ".csv");
   eval_distanceFile = std::ofstream("results_distances_" + file_index_str + ".csv");
@@ -737,6 +752,8 @@ void OctreeManager::setEvaluatorStartParams()
   evaluator->writeHeader(eval_resultsFile) << ",Step" << std::endl;
   eval_resultsFileOld << "Time (s),Plan duration (s),Plan Length,";
   evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step" << std::endl;
+  eval_externalClusterFile << "Time (s),Plan duration (s),Plan Length,";
+  external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step" << std::endl;
   eval_plannerStartTime = ros::Time::now();
   eval_accumulatedPlanDuration = 0;
   eval_accumulatedPlanLength = 0;
@@ -773,6 +790,9 @@ bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
   eval_resultsFileOld << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
   evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << std::endl;
 
+  eval_externalClusterFile << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << std::endl;
+
   writeVector(eval_fruitCellPercFile, passed_time, res.fruit_cell_percentages) << std::endl;
   writeVector(eval_volumeAccuracyFile, passed_time, res.volume_accuracies) << std::endl;
   writeVector(eval_distanceFile, passed_time, res.distances) << std::endl;
@@ -784,6 +804,7 @@ bool OctreeManager::resetEvaluator()
 {
   eval_resultsFile.close();
   eval_resultsFileOld.close();
+  eval_externalClusterFile.close();
   eval_fruitCellPercFile.close();
   eval_volumeAccuracyFile.close();
   eval_distanceFile.close();

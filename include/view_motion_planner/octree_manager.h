@@ -11,10 +11,12 @@
 #include "octomap_vpp/roioctree_utils.h"
 #include <rvp_evaluation/gt_octree_loader.h>
 #include <rvp_evaluation/evaluator.h>
+#include <rvp_evaluation/evaluator_external_clusters.h>
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose.h"
 #include <moveit_visual_tools/moveit_visual_tools.h>
+#include <std_srvs/Empty.h>
 
 namespace view_motion_planner
 {
@@ -39,6 +41,7 @@ private:
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
   std::shared_ptr<rvp_evaluation::GtOctreeLoader> gtLoader;
   std::unique_ptr<rvp_evaluation::Evaluator> evaluator;
+  std::unique_ptr<rvp_evaluation::ExternalClusterEvaluator> external_cluster_evaluator;
   boost::mutex own_mtx;
   boost::mutex &tree_mtx;
   const std::string map_frame;
@@ -63,6 +66,7 @@ private:
   size_t eval_trial_num;
   std::ofstream eval_resultsFile;
   std::ofstream eval_resultsFileOld;
+  std::ofstream eval_externalClusterFile;
   std::ofstream eval_fruitCellPercFile;
   std::ofstream eval_volumeAccuracyFile;
   std::ofstream eval_distanceFile;
@@ -70,6 +74,10 @@ private:
   double eval_accumulatedPlanDuration;
   double eval_accumulatedPlanLength;
   std::string eval_lastStep;
+
+  ros::ServiceClient resetMoveitOctomapClient;
+  ros::ServiceClient resetVoxbloxMapClient;
+  std_srvs::Empty emptySrv;
 
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
