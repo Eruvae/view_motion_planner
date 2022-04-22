@@ -121,9 +121,6 @@ find_package(TBB REQUIRED)
 #   cfg/DynReconf1.cfg
 #   cfg/DynReconf2.cfg
 # )
-generate_dynamic_reconfigure_options(
-  cfg/Vmp.cfg
-)
 
 ###################################
 ## catkin specific configuration ##

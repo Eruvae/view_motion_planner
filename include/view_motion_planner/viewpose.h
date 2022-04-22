@@ -5,7 +5,7 @@
 #include <moveit/macros/class_forward.h>
 #include <geometry_msgs/Pose.h>
 #include <octomap/OcTreeKey.h>
-#include "view_motion_planner/VmpConfig.h"
+#include "roi_viewpoint_planner_msgs/VmpConfig.h"
 
 namespace view_motion_planner
 {

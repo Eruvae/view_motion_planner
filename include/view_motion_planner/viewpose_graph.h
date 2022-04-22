@@ -10,7 +10,7 @@
 #include "view_motion_planner/viewpose.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/octree_manager.h"
-#include "view_motion_planner/VmpConfig.h"
+#include "roi_viewpoint_planner_msgs/VmpConfig.h"
 
 namespace view_motion_planner
 {
