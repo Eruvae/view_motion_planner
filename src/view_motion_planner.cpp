@@ -28,6 +28,12 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
   vt_robot_state->setManualSceneUpdating();
 }
 
+ViewMotionPlanner::~ViewMotionPlanner()
+{
+  graph_builder_condition.shutdown();
+  graph_builder_condition.waitForResumeOrShutdown();
+}
+
 void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
 {
   ROS_INFO_STREAM("Reconfigure callback called, level " << level);
@@ -176,9 +182,12 @@ void ViewMotionPlanner::graphBuilderThread()
 {
   //static const size_t MAX_GRAPH_VERTICES = 10000;
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
-  while(ros::ok())
+  while(ros::ok() && !graph_builder_condition.isShutdown())
   {
     graph_builder_condition.wait();
+
+    if (graph_builder_condition.isShutdown())
+      break;
 
     //ROS_INFO_STREAM("Vertices in graph: " << boost::num_vertices(graph_manager->getGraph()));
     //if(boost::num_vertices(graph_manager->getGraph()) > MAX_GRAPH_VERTICES)
@@ -226,7 +235,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
   graph_manager->initStartPose(cam_vert);
   ros::Duration(config.graph_building_time).sleep();
 
-  for (ros::Rate rate(1); ros::ok(); rate.sleep()) // connect start pose if not connected
+  for (ros::Rate rate(1); ros::ok() && config.mode >= Vmp_BUILD_GRAPH; rate.sleep()) // connect start pose if not connected
   {
     boost::unique_lock lock(graph_manager->getGraphMutex());
     graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
@@ -236,7 +245,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
       break;
   }
 
-  while (ros::ok() && ros::Time::now() < end_time)
+  while (ros::ok() && config.mode >= Vmp_PLAN && ros::Time::now() < end_time)
   {
     pauseGraphBuilderThreads();
     ros::Time start_expand(ros::Time::now());
@@ -322,7 +331,7 @@ void ViewMotionPlanner::resumeGraphBuilderThreads()
 }
 
 void ViewMotionPlanner::plannerLoop()
-{
+{    
   octree_manager->waitForPointcloudWithRoi();
   boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
   //boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
@@ -347,7 +356,13 @@ void ViewMotionPlanner::plannerLoop()
   }
   else
   {
-    pathSearcherThread();
+    for (ros::Rate rate(100); ros::ok(); rate.sleep())
+    {
+      if (config.mode >= Vmp_BUILD_GRAPH)
+      {
+        pathSearcherThread();
+      }
+    }
   }
   /*for (ros::Rate rate(100); ros::ok(); rate.sleep())
   {

@@ -116,12 +116,12 @@ void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualiz
   std::unordered_set<Vertex> visualizedSet;
   toVisualizeQueue.push(current_start_vertex);
   //ROS_INFO_STREAM("Computing highest utility path");
-  for (ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose; vp != nullptr; vp=vp->pred)
+  for (ViewposePtr vp = config.goal_select_type == Vmp_BEST_UTILITY ? highest_util_pose : highest_ig_pose; vp != nullptr && ros::ok(); vp=vp->pred)
   {
     bestUtilityPoses.insert(vp);
   }
   size_t verts_bu = 0, verts_vis = 0, verts_exp = 0, verts_ue = 0;
-  while(!toVisualizeQueue.empty())
+  while(!toVisualizeQueue.empty() && ros::ok())
   {
     //ROS_INFO_STREAM("Visualize queue: " << toVisualizeQueue.size());
     Vertex v = toVisualizeQueue.front();

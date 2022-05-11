@@ -22,6 +22,7 @@ class PauseCondition
 private:
   const size_t TOTAL_THREADS;
   bool is_paused = true;
+  bool do_shutdown = false;
   size_t waiting_threads = 0;
   boost::mutex pause_mutex;
   boost::condition_variable resume_threads;
@@ -43,6 +44,10 @@ public:
         resume_threads.wait(lock);
       }
       waiting_threads--;
+      if (waiting_threads == 0)
+      {
+        wait_for_pause.notify_all();
+      }
   }
 
   void pause()
@@ -58,6 +63,30 @@ public:
       is_paused = false;
     }
     resume_threads.notify_all();
+  }
+
+  void shutdown()
+  {
+    {
+      boost::unique_lock<boost::mutex> lock(pause_mutex);
+      is_paused = false;
+      do_shutdown = true;
+    }
+    resume_threads.notify_all();
+  }
+
+  bool isShutdown()
+  {
+    return do_shutdown;
+  }
+
+  void waitForResumeOrShutdown()
+  {
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    while (waiting_threads > 0)
+    {
+      wait_for_pause.wait(lock);
+    }
   }
 
   void waitForPause()
@@ -77,6 +106,8 @@ public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                     const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads,
                     bool evaluation_mode=false, size_t eval_num_episodes=20, double eval_episode_duration=120.0);
+
+  ~ViewMotionPlanner();
 
   void poseVisualizeThread();
 
