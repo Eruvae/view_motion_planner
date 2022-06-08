@@ -100,6 +100,14 @@ public:
     return v;
   }
 
+  void removeVertex(const Vertex &v)
+  {
+    const ViewposePtr vp = graph[v];
+    vertex_map.erase(vp);
+    neighbor_data->remove(v);
+    boost::remove_vertex(v, graph);
+  }
+
   void clear()
   {
     boost::unique_lock lock(graph_mtx);
@@ -113,7 +121,7 @@ public:
     priorityQueue.clear();
   }
 
-  void connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
+  size_t connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
 
   void visualizeGraph(bool visualize_expanded, bool visualize_unexpanded);
 

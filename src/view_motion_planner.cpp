@@ -207,7 +207,11 @@ void ViewMotionPlanner::graphBuilderThread()
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
       Vertex v = graph_manager->addViewpose(vp);
-      graph_manager->connectNeighbors(v, static_cast<size_t>(config.max_nb_connect_count), config.max_nb_connect_dist);
+      size_t connections = graph_manager->connectNeighbors(v, static_cast<size_t>(config.max_nb_connect_count), config.max_nb_connect_dist);
+      if (config.discard_unconnected_vertices && connections == 0)
+      {
+        graph_manager->removeVertex(v);
+      }
     }
   }
 }

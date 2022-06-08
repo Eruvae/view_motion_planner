@@ -42,8 +42,9 @@ double ViewposeGraphManager::getVertexDistanceJoints(Vertex a, Vertex b)
   return graph[a]->state->distance(*(graph[b]->state), robot_manager->getJointModelGroup());
 }
 
-void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step)
+size_t ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step)
 {
+  size_t successful_connections = 0;
   std::vector<Vertex> neighbors;
   neighbor_data->nearestK(v, num_neighbors, neighbors);
 
@@ -102,8 +103,10 @@ void ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbor
       /*auto [edge, success] = */boost::add_edge(v, nv, t, graph);
       //t->cost = std::accumulate(t->traj->getWayPointDurations().begin(), t->traj->getWayPointDurations().end(), 0);
       t->last_collision_check_start_vertex = current_start_vertex_number;
+      successful_connections++;
     }
   }
+  return successful_connections;
 }
 
 void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualize_unexpanded)
