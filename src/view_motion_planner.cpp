@@ -261,11 +261,19 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     Vertex next_start_vertex = graph_manager->getCurrentStartVertex();
     bool moved = false;
     ROS_INFO_STREAM("Executing " << trajectories.size() << " trajectories");
+    if (trajectories.size() == 0)
+    {
+      ROS_WARN_STREAM("No trajectories; resetting graph");
+      graph_manager->clear();
+      next_start_vertex = initCameraPoseGraph();
+    }
     for (const auto &[next_vertex, traj, cost] : trajectories)
     {
       if (!traj)
       {
         ROS_WARN_STREAM("No trajectory found");
+        graph_manager->clear();
+        next_start_vertex = initCameraPoseGraph();
         graph_manager->connectNeighbors(next_start_vertex, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
         break;
       }
@@ -290,6 +298,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
         if (!success)
         {
           ROS_WARN_STREAM("Failed to execute trajectory, setting new start pose");
+          graph_manager->clear();
           next_start_vertex = initCameraPoseGraph();
           graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
           break;
