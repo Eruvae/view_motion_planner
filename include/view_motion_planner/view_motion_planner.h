@@ -20,16 +20,23 @@ using moveit::planning_interface::MoveItErrorCode;
 class PauseCondition
 {
 private:
-  const size_t TOTAL_THREADS;
   bool is_paused = true;
   bool do_shutdown = false;
+  size_t started_threads = 0;
   size_t waiting_threads = 0;
   boost::mutex pause_mutex;
   boost::condition_variable resume_threads;
   boost::condition_variable wait_for_pause;
+  boost::condition_variable wait_for_shutdown;
 
 public:
-  PauseCondition(size_t number_of_threads) : TOTAL_THREADS(number_of_threads) {}
+  PauseCondition() {}
+
+  void confirm_start()
+  {
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    started_threads++;
+  }
 
   void wait()
   {
@@ -37,7 +44,7 @@ public:
       waiting_threads++;
       while(is_paused)
       {
-        if (waiting_threads == TOTAL_THREADS)
+        if (waiting_threads == started_threads)
         {
           wait_for_pause.notify_all();
         }
@@ -75,24 +82,43 @@ public:
     resume_threads.notify_all();
   }
 
+  void confirm_shutdown()
+  {
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    started_threads--;
+    if (started_threads == 0)
+    {
+      wait_for_shutdown.notify_all();
+    }
+  }
+
   bool isShutdown()
   {
     return do_shutdown;
   }
 
-  void waitForResumeOrShutdown()
+  void waitForResume()
   {
     boost::unique_lock<boost::mutex> lock(pause_mutex);
-    while (waiting_threads > 0)
+    while (started_threads > 0 && waiting_threads > 0)
     {
       wait_for_pause.wait(lock);
+    }
+  }
+
+  void waitForShutdown()
+  {
+    boost::unique_lock<boost::mutex> lock(pause_mutex);
+    while (started_threads > 0)
+    {
+      wait_for_shutdown.wait(lock);
     }
   }
 
   void waitForPause()
   {
     boost::unique_lock<boost::mutex> lock(pause_mutex);
-    while (waiting_threads < TOTAL_THREADS)
+    while (waiting_threads < started_threads)
     {
       wait_for_pause.wait(lock);
     }
@@ -117,7 +143,7 @@ public:
 
   void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells);
 
-  Vertex initCameraPoseGraph();
+  std::optional<Vertex> initCameraPoseGraph();
 
   void pathSearcherThread(const ros::Time &end_time = ros::TIME_MAX);
 
@@ -168,8 +194,13 @@ private:
   boost::shared_mutex graph_building_pause_mutex;
   boost::condition_variable graph_building_pause_change;
 
+  boost::thread pose_visualize_thread;
+  boost::thread graph_visualize_thread;
+
   std::vector<boost::thread> graph_builder_threads;
   PauseCondition graph_builder_condition;
+  PauseCondition pose_visualizer_condition;
+  PauseCondition graph_visualizer_condition;
 };
 
 } // namespace view_motion_planner

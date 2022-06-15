@@ -19,8 +19,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, evaluation_mode)),
-    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config)),
-    graph_builder_condition(NUM_GRAPH_BUILDER_THREADS)
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))
 {
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
   vt_robot_state->loadMarkerPub(true);
@@ -31,7 +30,20 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
 ViewMotionPlanner::~ViewMotionPlanner()
 {
   graph_builder_condition.shutdown();
-  graph_builder_condition.waitForResumeOrShutdown();
+  pose_visualizer_condition.shutdown();
+  graph_visualizer_condition.shutdown();
+  //graph_builder_condition.waitForShutdown();
+  //pose_visualizer_condition.waitForShutdown();
+  //graph_visualizer_condition.waitForShutdown();
+  for (boost::thread &t : graph_builder_threads)
+  {
+    if (t.joinable())
+      t.join();
+  }
+  if (pose_visualize_thread.joinable())
+    pose_visualize_thread.join();
+  if (graph_visualize_thread.joinable())
+    graph_visualize_thread.join();
 }
 
 void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
@@ -94,8 +106,14 @@ void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
 
 void ViewMotionPlanner::poseVisualizeThread()
 {
-  for (ros::Rate rate(0.2); ros::ok(); rate.sleep())
+  pose_visualizer_condition.confirm_start();
+  for (ros::Rate rate(0.2); ros::ok() && !pose_visualizer_condition.isShutdown(); rate.sleep())
   {
+    pose_visualizer_condition.wait();
+
+    if (pose_visualizer_condition.isShutdown())
+      break;
+
     observationPoseMtx.lock_shared();
     if (observationPoses.size() > 0)
     {
@@ -123,12 +141,19 @@ void ViewMotionPlanner::poseVisualizeThread()
     }
     observationPoseMtx.unlock_shared();
   }
+  pose_visualizer_condition.confirm_shutdown();
 }
 
 void ViewMotionPlanner::graphVisualizeThread()
 {
-  for (ros::Rate rate(1); ros::ok(); rate.sleep())
+  graph_visualizer_condition.confirm_start();
+  for (ros::Rate rate(1); ros::ok() && !graph_visualizer_condition.isShutdown(); rate.sleep())
   {
+    graph_visualizer_condition.wait();
+
+    if (graph_visualizer_condition.isShutdown())
+      break;
+
     boost::shared_lock lock(graph_manager->getGraphMutex());
     ROS_INFO_STREAM("Computing connected components");
     ros::Time startTime = ros::Time::now();
@@ -148,6 +173,7 @@ void ViewMotionPlanner::graphVisualizeThread()
     vt_graph->trigger();
     ROS_INFO_STREAM("Viewpose graph published, took " << (ros::Time::now() - startTime));
   }
+  graph_visualizer_condition.confirm_shutdown();
 }
 
 /*void ViewMotionPlanner::generateViewposeGraph()
@@ -180,6 +206,7 @@ void ViewMotionPlanner::graphVisualizeThread()
 
 void ViewMotionPlanner::graphBuilderThread()
 {
+  graph_builder_condition.confirm_start();
   //static const size_t MAX_GRAPH_VERTICES = 10000;
   std::uniform_real_distribution<double> target_select_dist(0.0, 1.0);
   while(ros::ok() && !graph_builder_condition.isShutdown())
@@ -214,6 +241,7 @@ void ViewMotionPlanner::graphBuilderThread()
       }
     }
   }
+  graph_builder_condition.confirm_shutdown();
 }
 
 void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
@@ -222,11 +250,12 @@ void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStat
   octree_manager->computePoseObservedCells(viewpose, freeCells, occCells, unkCells);
 }
 
-Vertex ViewMotionPlanner::initCameraPoseGraph()
+std::optional<Vertex> ViewMotionPlanner::initCameraPoseGraph()
 {
   boost::unique_lock lock(graph_manager->getGraphMutex());
   ViewposePtr cam_vp(new Viewpose());
   cam_vp->state = robot_manager->getCurrentState();
+  if (!cam_vp->state) return std::nullopt;
   cam_vp->pose = robot_manager->getCurrentPose();
   Vertex cam_vert = graph_manager->addViewpose(cam_vp);
   return cam_vert;
@@ -235,15 +264,20 @@ Vertex ViewMotionPlanner::initCameraPoseGraph()
 void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
 {
   resumeGraphBuilderThreads();
-  Vertex cam_vert = initCameraPoseGraph();
-  graph_manager->initStartPose(cam_vert);
+  std::optional<Vertex> cam_vert = initCameraPoseGraph();
+  if (!cam_vert)
+  {
+    ROS_ERROR("Camera pose not initialized");
+    return;
+  }
+  graph_manager->initStartPose(*cam_vert);
   ros::Duration(config.graph_building_time).sleep();
 
   for (ros::Rate rate(1); ros::ok() && config.mode >= Vmp_BUILD_GRAPH; rate.sleep()) // connect start pose if not connected
   {
     boost::unique_lock lock(graph_manager->getGraphMutex());
-    graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
-    size_t num_out_edges = boost::out_degree(cam_vert, graph_manager->getGraph());
+    graph_manager->connectNeighbors(*cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
+    size_t num_out_edges = boost::out_degree(*cam_vert, graph_manager->getGraph());
     ROS_INFO_STREAM("Number of out edges from cam: " << num_out_edges);
     if (num_out_edges > 0)
       break;
@@ -262,7 +296,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
 
     std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> trajectories = graph_manager->getNextTrajectories(config.execution_cost_limit);
-    Vertex next_start_vertex = graph_manager->getCurrentStartVertex();
+    std::optional<Vertex> next_start_vertex = graph_manager->getCurrentStartVertex();
     bool moved = false;
     ROS_INFO_STREAM("Executing " << trajectories.size() << " trajectories");
     if (trajectories.size() == 0)
@@ -270,6 +304,11 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
       ROS_WARN_STREAM("No trajectories; resetting graph");
       graph_manager->clear();
       next_start_vertex = initCameraPoseGraph();
+      if (!next_start_vertex)
+      {
+        ROS_ERROR("Camera pose not initialized");
+        return;
+      }
     }
     for (const auto &[next_vertex, traj, cost] : trajectories)
     {
@@ -278,7 +317,12 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
         ROS_WARN_STREAM("No trajectory found");
         graph_manager->clear();
         next_start_vertex = initCameraPoseGraph();
-        graph_manager->connectNeighbors(next_start_vertex, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
+        if (!next_start_vertex)
+        {
+          ROS_ERROR("Camera pose not initialized");
+          return;
+        }
+        graph_manager->connectNeighbors(*next_start_vertex, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
         break;
       }
       else
@@ -293,7 +337,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
         }
         bool success = robot_manager->executeTrajectory(traj);
         moved = true;
-        graph_manager->markAsVisited(next_start_vertex);
+        graph_manager->markAsVisited(*next_start_vertex);
         octree_manager->waitForPointcloudWithRoi();
         if (evaluation_mode)
         {
@@ -304,7 +348,12 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
           ROS_WARN_STREAM("Failed to execute trajectory, setting new start pose");
           graph_manager->clear();
           next_start_vertex = initCameraPoseGraph();
-          graph_manager->connectNeighbors(cam_vert, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
+          if (!next_start_vertex)
+          {
+            ROS_ERROR("Camera pose not initialized");
+            return;
+          }
+          graph_manager->connectNeighbors(*next_start_vertex, static_cast<size_t>(config.max_start_state_connect_count), config.max_start_state_connect_dist);
           break;
         }
         else
@@ -316,7 +365,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     if (moved)
     {
       graph_manager->cleanupAfterMove();
-      graph_manager->initStartPose(next_start_vertex);
+      graph_manager->initStartPose(*next_start_vertex);
     }
     resumeGraphBuilderThreads();
     ros::Duration(config.graph_building_time).sleep();
@@ -346,8 +395,10 @@ void ViewMotionPlanner::resumeGraphBuilderThreads()
 void ViewMotionPlanner::plannerLoop()
 {    
   octree_manager->waitForPointcloudWithRoi();
-  boost::thread poseVisualizeThread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this));
-  //boost::thread graphVisualizeThread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this));
+  pose_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this)));
+  graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
+  pose_visualizer_condition.resume();
+  graph_visualizer_condition.resume();
 
   initGraphBuilderThreads();
 
