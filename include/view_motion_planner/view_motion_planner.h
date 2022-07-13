@@ -11,6 +11,8 @@
 #include "view_motion_planner/viewpose_graph.h"
 #include "roi_viewpoint_planner_msgs/VmpConfig.h"
 
+#include "trolley_remote/trolley_remote.h"
+
 namespace view_motion_planner
 {
 
@@ -201,6 +203,9 @@ private:
   PauseCondition graph_builder_condition;
   PauseCondition pose_visualizer_condition;
   PauseCondition graph_visualizer_condition;
+
+  trolley_remote::TrolleyRemote trolley_remote;
+  int trolley_current_segment = 0;
 };
 
 } // namespace view_motion_planner
