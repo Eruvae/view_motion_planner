@@ -147,6 +147,12 @@ public:
 
   std::optional<Vertex> initCameraPoseGraph();
 
+  bool buildGraph();
+
+  bool searchPath();
+
+  bool executePath();
+
   void pathSearcherThread(const ros::Time &end_time = ros::TIME_MAX);
 
   //void generateViewposeGraph();

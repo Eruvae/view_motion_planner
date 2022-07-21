@@ -34,6 +34,7 @@ int main(int argc, char **argv)
 
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads,
                             evaluate_results, eval_num_episodes, eval_episode_duration);
+  ROS_INFO_STREAM("PLANNER CREATED");
   planner.getRobotManager()->moveToHomePose();
   planner.plannerLoop();
 }
