@@ -258,11 +258,11 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
         vp->pose.position = octomap::pointOctomapToMsg(end);
         vp->pose.orientation = tf2::toMsg(getQuatInDir(-direction));
 
-        vp->state = robot_manager->getPoseRobotState(vp->pose);
+        vp->state = robot_manager->getPoseRobotState(transformToWorkspace(vp->pose));
         if (vp->state == nullptr)
           return;
 
-        /* std::vector<double> joint_values = robot_manager->getPoseJointValues(pose);
+        /* std::vector<double> joint_values = robot_manager->getPoseJointValues(transformToWorkspace(pose));
         if (joint_values.empty())
           return; */
 
@@ -364,7 +364,7 @@ bool OctreeManager::getRandomBorderTarget(octomap::point3d &target)
   return true;
 }
 
-ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSensorRange, double maxSensorRange)
+ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
 {
   octomap::point3d origin;
   bool sample_target_success = false;
@@ -391,7 +391,50 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
     return nullptr;
   }
   target_vector_mtx.unlock();
-  octomap::point3d end = sampleRandomViewpoint(origin, minSensorRange, maxSensorRange, random_engine);
+  octomap::point3d end;
+  if (config.vp_select_type == Vmp_RANGE)
+  {
+    bool found_vp = false;
+    for (size_t i=0; i < 100; i++)
+    {
+      end = sampleRandomViewpoint(origin, config.sensor_min_range, config.sensor_max_range, random_engine);
+      if (workspaceTree->search(transformToWorkspace(end)) != nullptr) // Point in workspace region
+      {
+        found_vp = true;
+        break;
+      }
+    }
+    if (!found_vp)
+    {
+      tree_mtx.unlock();
+      return nullptr;
+    }
+  }
+  else
+  {
+    bool found_vp = false;
+    for (size_t i=0; i < 100; i++)
+    {
+      octomap::point3d end_ws = sampleRandomWorkspacePoint(); // uses min/max coordinates of workspace
+      end = transformToMapFrame(end_ws);
+      if (config.vp_select_type == Vmp_WORKSPACE_RANGE)
+      {
+        double dist = end.distance(origin);
+        if (dist < config.sensor_min_range || dist > config.sensor_max_range)
+          continue;
+      }
+      if (workspaceTree->search(end_ws) != nullptr) // Point in workspace region
+      {
+        found_vp = true;
+        break;
+      }
+    }
+    if (!found_vp)
+    {
+      tree_mtx.unlock();
+      return nullptr;
+    }
+  }
   octomap::KeyRay ray;
 
   tree_mtx.lock();
@@ -406,18 +449,13 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type, double minSenso
       return nullptr;
     }
   }
-  if (workspaceTree->search(transformToWorkspace(end)) == nullptr) // Point not in workspace region
-  {
-    tree_mtx.unlock();
-    return nullptr;
-  }
 
   ViewposePtr vp(new Viewpose());
 
   vp->pose.position = octomap::pointOctomapToMsg(end);
   vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
 
-  vp->state = robot_manager->getPoseRobotState(vp->pose);
+  vp->state = robot_manager->getPoseRobotState(transformToWorkspace(vp->pose));
   vp->type = type;
 
   if (vp->state == nullptr)
@@ -532,90 +570,6 @@ std::shared_ptr<octomap_vpp::WorkspaceOcTree> OctreeManager::computeObservationR
   return observationRegions;
 }
 */
-
-octomap::point3d OctreeManager::transformToMapFrame(const octomap::point3d &p)
-{
-  if (map_frame == ws_frame)
-    return p;
-
-  geometry_msgs::TransformStamped trans;
-  try
-  {
-    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
-  }
-  catch (const tf2::TransformException &e)
-  {
-    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
-    return p;
-  }
-
-  octomap::point3d pt;
-  tf2::doTransform(p, pt, trans);
-  return pt;
-}
-
-geometry_msgs::Pose OctreeManager::transformToMapFrame(const geometry_msgs::Pose &p)
-{
-  if (map_frame == ws_frame)
-    return p;
-
-  geometry_msgs::TransformStamped trans;
-  try
-  {
-    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
-  }
-  catch (const tf2::TransformException &e)
-  {
-    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
-    return p;
-  }
-
-  geometry_msgs::Pose pt;
-  tf2::doTransform(p, pt, trans);
-  return pt;
-}
-
-octomap::point3d OctreeManager::transformToWorkspace(const octomap::point3d &p)
-{
-  if (map_frame == ws_frame)
-    return p;
-
-  geometry_msgs::TransformStamped trans;
-  try
-  {
-    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
-  }
-  catch (const tf2::TransformException &e)
-  {
-    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
-    return p;
-  }
-
-  octomap::point3d pt;
-  tf2::doTransform(p, pt, trans);
-  return pt;
-}
-
-geometry_msgs::Pose OctreeManager::transformToWorkspace(const geometry_msgs::Pose &p)
-{
-  if (map_frame == ws_frame)
-    return p;
-
-  geometry_msgs::TransformStamped trans;
-  try
-  {
-    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
-  }
-  catch (const tf2::TransformException &e)
-  {
-    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
-    return p;
-  }
-
-  geometry_msgs::Pose pt;
-  tf2::doTransform(p, pt, trans);
-  return pt;
-}
 
 std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_prefix)
 {

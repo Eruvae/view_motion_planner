@@ -98,7 +98,7 @@ public:
   bool getRandomExplTarget(octomap::point3d &target);
   bool getRandomBorderTarget(octomap::point3d &target);
 
-  ViewposePtr sampleRandomViewPose(TargetType type, double minSensorRange, double maxSensorRange);
+  ViewposePtr sampleRandomViewPose(TargetType type);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
 
@@ -152,11 +152,58 @@ public:
     }
   }
 
-  octomap::point3d transformToMapFrame(const octomap::point3d &p);
-  geometry_msgs::Pose transformToMapFrame(const geometry_msgs::Pose &p);
+  octomap::point3d sampleRandomWorkspacePoint()
+  {
+    std::uniform_real_distribution<float> x_dist(wsMin.x(), wsMax.x());
+    std::uniform_real_distribution<float> y_dist(wsMin.y(), wsMax.y());
+    std::uniform_real_distribution<float> z_dist(wsMin.z(), wsMax.z());
+    octomap::point3d target(x_dist(random_engine), y_dist(random_engine), z_dist(random_engine));
+    return target;
+  }
 
-  octomap::point3d transformToWorkspace(const octomap::point3d &p);
-  geometry_msgs::Pose transformToWorkspace(const geometry_msgs::Pose &p);
+  template<typename PointT>
+  PointT transformToMapFrame(const PointT &p)
+  {
+    if (map_frame == ws_frame)
+      return p;
+
+    geometry_msgs::TransformStamped trans;
+    try
+    {
+      trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+    }
+    catch (const tf2::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToMapFrame: " << e.what());
+      return p;
+    }
+
+    PointT pt;
+    tf2::doTransform(p, pt, trans);
+    return pt;
+  }
+
+  template<typename PointT>
+  PointT transformToWorkspace(const PointT &p)
+  {
+    if (map_frame == ws_frame)
+      return p;
+
+    geometry_msgs::TransformStamped trans;
+    try
+    {
+      trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
+    }
+    catch (const tf2::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+      return p;
+    }
+
+    PointT pt;
+    tf2::doTransform(p, pt, trans);
+    return pt;
+  }
 
   std::string saveOctomap(const std::string &name = "planningTree", bool name_is_prefix = true);
 

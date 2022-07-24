@@ -229,7 +229,7 @@ void ViewMotionPlanner::graphBuilderThread()
     else
       type = TARGET_BORDER;
 
-    ViewposePtr vp = octree_manager->sampleRandomViewPose(type, config.sensor_min_range, config.sensor_max_range);
+    ViewposePtr vp = octree_manager->sampleRandomViewPose(type);
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
@@ -246,7 +246,7 @@ void ViewMotionPlanner::graphBuilderThread()
 
 void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
 {
-  octomap::pose6d viewpose = robot_manager->getRobotStatePose(state);
+  octomap::pose6d viewpose = octree_manager->transformToMapFrame(robot_manager->getRobotStatePose(state));
   octree_manager->computePoseObservedCells(viewpose, freeCells, occCells, unkCells);
 }
 
@@ -256,7 +256,7 @@ std::optional<Vertex> ViewMotionPlanner::initCameraPoseGraph()
   ViewposePtr cam_vp(new Viewpose());
   cam_vp->state = robot_manager->getCurrentState();
   if (!cam_vp->state) return std::nullopt;
-  cam_vp->pose = robot_manager->getCurrentPose();
+  cam_vp->pose = octree_manager->transformToMapFrame(robot_manager->getCurrentPose());
   Vertex cam_vert = graph_manager->addViewpose(cam_vp);
   return cam_vert;
 }
