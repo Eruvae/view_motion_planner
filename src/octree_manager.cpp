@@ -33,6 +33,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   samplingTreePub = nh.advertise<octomap_msgs::Octomap>("sampling_tree", 1, true);
   observationRegionsPub = nh.advertise<octomap_msgs::Octomap>("observation_regions", 1);
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
+  targetPub = nh.advertise<visualization_msgs::Marker>("targets", 1);
   //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
   resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
@@ -190,6 +191,7 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
   target_vector_mtx.lock();
   updateRoiTargets();
   updateExplTargets();
+  publishTargets();
   target_vector_mtx.unlock();
   ROS_INFO_STREAM("Updating targets took " << (ros::Time::now() - updateTargetStartTime) << " s");
   ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
@@ -730,6 +732,50 @@ void OctreeManager::publishObservationPoints(const std::vector<ViewposePtr> &vps
   pc->header.frame_id = map_frame;
   pcl_conversions::toPCL(ros::Time::now(), pc->header.stamp);
   observatonPointsPub.publish(pc);
+}
+
+void OctreeManager::publishTargets()
+{
+  static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
+  static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
+  static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
+
+  const size_t NUM_P = current_roi_targets.size() + current_expl_targets.size() + current_border_targets.size();
+  if (NUM_P == 0)
+  {
+    ROS_WARN("No targets");
+    return;
+  }
+
+  visualization_msgs::Marker m;
+  m.header.frame_id = map_frame;
+  m.header.stamp = ros::Time();
+  m.ns = "targets";
+  m.id = 0;
+  m.type = visualization_msgs::Marker::POINTS;
+  m.action = visualization_msgs::Marker::ADD;
+  m.pose.orientation.w = 1.0;
+  m.scale.x = 0.005;
+  m.scale.y = 0.005;
+  m.color.a = 1.0;
+  m.points.reserve(NUM_P);
+  m.colors.reserve(NUM_P);
+  for (octomap::point3d &p : current_roi_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_RED);
+  }
+  for (octomap::point3d &p : current_expl_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_GREEN);
+  }
+  for (octomap::point3d &p : current_border_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_BLUE);
+  }
+  targetPub.publish(m);
 }
 
 bool OctreeManager::startEvaluator()

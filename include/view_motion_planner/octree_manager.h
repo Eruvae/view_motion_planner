@@ -51,6 +51,7 @@ private:
   ros::Publisher samplingTreePub;
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
+  ros::Publisher targetPub;
   ros::Subscriber roiSub;
   size_t old_rois;
   octomap::KeySet encountered_keys;
@@ -169,6 +170,7 @@ public:
   void publishObservationRegions();
   void publishObservationPoints(const octomap::KeySet &keys);
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
+  void publishTargets();
 
   bool startEvaluator();
   void setEvaluatorStartParams();
