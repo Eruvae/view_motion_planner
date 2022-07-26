@@ -289,14 +289,17 @@ bool ViewMotionPlanner::searchPath()
 {
   pauseGraphBuilderThreads();
   ros::Time start_expand(ros::Time::now());
+  bool has_expanded = false;
   while (ros::ok())
   {
     bool success = graph_manager->expand();
     if (!success || (ros::Time::now() - start_expand).toSec() > config.graph_search_time)
-      return false;
+      break;
+
+    has_expanded = true;
   }
   graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
-  return true;
+  return has_expanded;
 }
 
 bool ViewMotionPlanner::executePath()
@@ -385,7 +388,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
 
   while (ros::ok() && config.mode >= Vmp_PLAN && ros::Time::now() < end_time)
   {
-    if (!searchPath())
+    if (!searchPath() || config.mode < Vmp_PLAN_AND_EXECUTE)
     {
       if (config.insert_scan_if_not_moved)
         octree_manager->waitForPointcloudWithRoi();
@@ -428,9 +431,9 @@ void ViewMotionPlanner::plannerLoop()
   ROS_INFO_STREAM("PLANNER LOOP CALLED");
   octree_manager->waitForPointcloudWithRoi();
   pose_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this)));
-  graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
+  //graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
   pose_visualizer_condition.resume();
-  graph_visualizer_condition.resume();
+  //graph_visualizer_condition.resume();
 
   initGraphBuilderThreads();
 
