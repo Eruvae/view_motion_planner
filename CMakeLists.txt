@@ -183,6 +183,7 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(planner_node src/planner_node.cpp ${VIEW_MOTION_PLANNER_SRC_FILES})
+add_executable(plan_on_map src/plan_on_map.cpp ${VIEW_MOTION_PLANNER_SRC_FILES})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -194,12 +195,14 @@ add_executable(planner_node src/planner_node.cpp ${VIEW_MOTION_PLANNER_SRC_FILES
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(planner_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(plan_on_map ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
 target_link_libraries(planner_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${YAMLCPP_LIBRARIES} ${PCL_LIBRARIES} ${OMPL_LIBRARIES} tbb)
+target_link_libraries(plan_on_map ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${YAMLCPP_LIBRARIES} ${PCL_LIBRARIES} ${OMPL_LIBRARIES} tbb)
 
 #############
 ## Install ##

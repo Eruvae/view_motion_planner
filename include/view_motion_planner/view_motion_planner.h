@@ -173,6 +173,11 @@ public:
     return robot_manager.get();
   }
 
+  OctreeManager* getOctreeManager()
+  {
+    return octree_manager.get();
+  }
+
 private:
   std::default_random_engine random_engine;
 
