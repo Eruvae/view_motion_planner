@@ -6,7 +6,8 @@ namespace view_motion_planner
 {
 
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
-                                     const std::string &map_frame, const std::string &ws_frame, double tree_resolution, size_t graph_builder_threads,
+                                     const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
+                                     const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
                                      bool evaluation_mode, size_t eval_num_episodes, double eval_episode_duration)
   : random_engine(std::random_device{}()),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
@@ -16,7 +17,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
-    robot_manager(new RobotManager(nh, tfBuffer, map_frame)),
+    robot_manager(new RobotManager(nh, tfBuffer, map_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, evaluation_mode)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))

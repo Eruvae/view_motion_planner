@@ -23,6 +23,9 @@ int main(int argc, char **argv)
   std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
+  std::string robot_description_param_name = nh.param<std::string>("/roi_viewpoint_planner/robot_description_param_name", "robot_description");
+  std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
+  std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
 
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool evaluate_results = nhp.param<bool>("evaluate", false);
@@ -32,7 +35,9 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, num_graph_builder_threads,
+  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
+                            robot_description_param_name, group_name, ee_link_name,
+                            tree_resolution, num_graph_builder_threads,
                             evaluate_results, eval_num_episodes, eval_episode_duration);
   ROS_INFO_STREAM("PLANNER CREATED");
   planner.getRobotManager()->moveToHomePose();

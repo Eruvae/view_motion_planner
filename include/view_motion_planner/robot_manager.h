@@ -36,7 +36,8 @@ private:
 
 public:
   RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame = "world",
-                  const std::string& group_name = "manipulator", const std::string &ee_link_name = "camera_link");
+               const std::string &robot_description_param_name = "robot_description",
+               const std::string& group_name = "manipulator", const std::string &ee_link_name = "camera_link");
 
   moveit::core::RobotModelConstPtr getRobotModel()
   {

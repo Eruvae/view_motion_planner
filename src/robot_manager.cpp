@@ -5,11 +5,13 @@
 namespace view_motion_planner
 {
 
-RobotManager::RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame, const std::string& group_name, const std::string &ee_link_name)
+RobotManager::RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame,
+                           const std::string &robot_description_param_name,
+                           const std::string& group_name, const std::string &ee_link_name)
   : tfBuffer(tfBuffer),
     group_name(group_name),
-    manipulator_group(group_name),
-    rml(new robot_model_loader::RobotModelLoader("robot_description")),
+    manipulator_group(MoveGroupInterface::Options(group_name, robot_description_param_name)),
+    rml(new robot_model_loader::RobotModelLoader(robot_description_param_name)),
     psm(new planning_scene_monitor::PlanningSceneMonitor(rml)),
     kinematic_model(rml->getModel()),
     jmg(kinematic_model->getJointModelGroup(group_name)),
