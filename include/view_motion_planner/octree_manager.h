@@ -63,6 +63,8 @@ private:
 
   const std::vector<octomath::Vector3> sphere_vecs;
 
+  bool update_planning_tree;
+
   // Evaluator variables
   size_t eval_trial_num;
   std::ofstream eval_resultsFile;
@@ -85,7 +87,8 @@ private:
 public:
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000, bool initialize_evaluator=false);
+                std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000,
+                bool update_planning_tree=true, bool initialize_evaluator=false);
 
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
 

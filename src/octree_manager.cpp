@@ -17,7 +17,7 @@ namespace view_motion_planner
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                              const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                             std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs, bool initialize_evaluator) :
+                             std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs, bool update_planning_tree, bool initialize_evaluator) :
   nh(nh), config(config), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
   planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), workspaceTree(nullptr), samplingTree(nullptr),
   wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
@@ -26,7 +26,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   stMax(FLT_MAX, FLT_MAX, FLT_MAX),
   observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new rvp_evaluation::GtOctreeLoader(tree_resolution)),
   evaluator(nullptr), tree_mtx(own_mtx), map_frame(map_frame), ws_frame(ws_frame),  old_rois(0),
-  sphere_vecs(getFibonacciSphereVectors(num_sphere_vecs))
+  sphere_vecs(getFibonacciSphereVectors(num_sphere_vecs)),
+  update_planning_tree(update_planning_tree)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   workspaceTreePub = nh.advertise<octomap_msgs::Octomap>("workspace_tree", 1, true);
@@ -201,6 +202,9 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
 
 void OctreeManager::waitForPointcloudWithRoi()
 {
+  if (!update_planning_tree)
+    return;
+
   pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh, ros::Duration());
   if (!msg)
   {

@@ -134,7 +134,7 @@ public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                     const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                     const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
-                    bool evaluation_mode=false, size_t eval_num_episodes=20, double eval_episode_duration=120.0);
+                    bool update_planning_tree=true, bool evaluation_mode=false, size_t eval_num_episodes=20, double eval_episode_duration=120.0);
 
   ~ViewMotionPlanner();
 
@@ -178,10 +178,23 @@ public:
     return octree_manager.get();
   }
 
+  void updateConfig()
+  {
+    boost::recursive_mutex::scoped_lock lock(config_mutex);
+    config_server.updateConfig(config);
+  }
+
+  VmpConfig& getConfig()
+  {
+    return config;
+  }
+
 private:
   std::default_random_engine random_engine;
 
   const size_t NUM_GRAPH_BUILDER_THREADS;
+
+  bool update_planning_tree;
 
   bool evaluation_mode;
   size_t eval_num_episodes;

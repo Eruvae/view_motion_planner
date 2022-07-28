@@ -27,6 +27,7 @@ int main(int argc, char **argv)
   std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
   std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
 
+  bool update_planning_tree = nhp.param<bool>("update_planning_tree", true);
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool evaluate_results = nhp.param<bool>("evaluate", false);
   size_t eval_num_episodes = static_cast<size_t>(nhp.param<int>("episodes", 20));
@@ -38,7 +39,7 @@ int main(int argc, char **argv)
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
-                            evaluate_results, eval_num_episodes, eval_episode_duration);
+                            update_planning_tree, evaluate_results, eval_num_episodes, eval_episode_duration);
   ROS_INFO_STREAM("PLANNER CREATED");
   planner.getRobotManager()->moveToHomePose();
   planner.plannerLoop();
