@@ -1,8 +1,40 @@
 #include <ros/ros.h>
 #include <ros/package.h>
+#include <roi_viewpoint_planner_msgs/SaveOctomap.h>
+#include <roi_viewpoint_planner_msgs/LoadOctomap.h>
 #include "view_motion_planner/view_motion_planner.h"
 
+
+
 using namespace view_motion_planner;
+
+ViewMotionPlanner *planner;
+
+bool saveOctomap(roi_viewpoint_planner_msgs::SaveOctomap::Request &req, roi_viewpoint_planner_msgs::SaveOctomap::Response &res)
+{
+  if (req.specify_filename)
+    res.filename = planner->getOctreeManager()->saveOctomap(req.name, req.name_is_prefix);
+  else
+    res.filename = planner->getOctreeManager()->saveOctomap();
+
+  res.success = res.filename != "";
+  return true;
+}
+
+bool loadOctomap(roi_viewpoint_planner_msgs::LoadOctomap::Request &req, roi_viewpoint_planner_msgs::LoadOctomap::Response &res)
+{
+  int err_code = planner->getOctreeManager()->loadOctomap(req.filename);
+  res.success = (err_code == 0);
+  if (err_code == -1) res.error_message = "Deserialization failed";
+  else if (err_code == -2) res.error_message = "Wrong Octree type";
+  return true;
+}
+
+bool resetOctomap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+{
+  planner->getOctreeManager()->resetOctomap();
+  return true;
+}
 
 int main(int argc, char **argv)
 {
@@ -36,11 +68,16 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
-                            robot_description_param_name, group_name, ee_link_name,
-                            tree_resolution, num_graph_builder_threads,
-                            update_planning_tree, evaluate_results, eval_num_episodes, eval_episode_duration);
+  planner = new ViewMotionPlanner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
+                                  robot_description_param_name, group_name, ee_link_name,
+                                  tree_resolution, num_graph_builder_threads,
+                                  update_planning_tree, evaluate_results, eval_num_episodes, eval_episode_duration);
+
+  ros::ServiceServer saveOctomapService = nh.advertiseService("/roi_viewpoint_planner/save_octomap", saveOctomap);
+  ros::ServiceServer loadOctomapService = nh.advertiseService("/roi_viewpoint_planner/load_octomap", loadOctomap);
+  ros::ServiceServer resetOctomapService = nh.advertiseService("/roi_viewpoint_planner/reset_octomap", resetOctomap);
+
   ROS_INFO_STREAM("PLANNER CREATED");
-  planner.getRobotManager()->moveToHomePose();
-  planner.plannerLoop();
+  planner->getRobotManager()->moveToHomePose();
+  planner->plannerLoop();
 }
