@@ -299,4 +299,13 @@ std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> Vi
   return next_trajectories;
 }
 
+bool ViewposeGraphManager::fixTrajectoryStartPoint(const robot_trajectory::RobotTrajectoryPtr &traj, const moveit::core::RobotStatePtr &state)
+{
+  moveit::core::RobotStatePtr cur_start = traj->getFirstWayPointPtr();
+  traj->addPrefixWayPoint(state, 0);
+  trajectory_processing::TimeOptimalTrajectoryGeneration trajectory_processor;
+  bool success = trajectory_processor.computeTimeStamps(*traj, 1.0, 1.0);
+  return success;
+}
+
 } // namespace view_motion_planner

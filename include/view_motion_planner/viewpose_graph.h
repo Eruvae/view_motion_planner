@@ -142,6 +142,8 @@ public:
 
   std::vector<std::tuple<Vertex, robot_trajectory::RobotTrajectoryPtr, double>> getNextTrajectories(double cost_limit);
 
+  static bool fixTrajectoryStartPoint(const robot_trajectory::RobotTrajectoryPtr &traj, const moveit::core::RobotStatePtr &state);
+
 };
 
 } // namespace view_motion_planner

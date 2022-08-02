@@ -346,6 +346,10 @@ bool ViewMotionPlanner::executePath()
           break;
         }
       }
+      if (config.fix_trajectories_on_execution)
+      {
+        graph_manager->fixTrajectoryStartPoint(traj, robot_manager->getCurrentState());
+      }
       bool success = robot_manager->executeTrajectory(traj);
       moved = true;
       graph_manager->markAsVisited(*next_start_vertex);
