@@ -446,6 +446,8 @@ void ViewMotionPlanner::plannerLoop()
   if (evaluation_mode)
   {
     ROS_INFO_STREAM("EVALUATION MODE ACTIVATED");
+    config.mode = Vmp_PLAN_AND_EXECUTE;
+    updateConfig();
     octree_manager->startEvaluator();
     for (size_t current_episode=0; ros::ok() && current_episode < eval_num_episodes; current_episode++)
     {

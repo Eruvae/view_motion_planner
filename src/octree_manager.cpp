@@ -220,7 +220,7 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
   std::vector<ViewposePtr> observationPoses;
   boost::mutex obsVpMtx;
 
-  tree_mtx.lock();
+  boost::unique_lock lock(tree_mtx);
   octomap::KeySet roiKeys = planningTree->getRoiKeys();
 
   #ifdef RAYCAST_PARALLEL_LOOP
@@ -276,10 +276,8 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
       }
     });
   });
-  tree_mtx.unlock();
 
   ROS_INFO_STREAM("Generating observation poses took " << (ros::Time::now() - startTime));
-
   return observationPoses;
 }
 
@@ -410,7 +408,6 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     }
     if (!found_vp)
     {
-      tree_mtx.unlock();
       return nullptr;
     }
   }
@@ -435,13 +432,12 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     }
     if (!found_vp)
     {
-      tree_mtx.unlock();
       return nullptr;
     }
   }
   octomap::KeyRay ray;
 
-  tree_mtx.lock();
+  boost::unique_lock lock(tree_mtx);
   planningTree->computeRayKeys(origin, end, ray);
   auto rayIt = ray.begin();
   for (auto rayEnd = ray.end(); rayIt != rayEnd; rayIt++)
@@ -449,7 +445,6 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     octomap_vpp::RoiOcTreeNode *node = planningTree->search(*rayIt);
     if (node && planningTree->isNodeOccupied(node))
     {
-      tree_mtx.unlock();
       return nullptr;
     }
   }
@@ -464,10 +459,8 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
 
   if (vp->state == nullptr)
   {
-    tree_mtx.unlock();
     return nullptr;
   }
-  tree_mtx.unlock();
   return vp;
 }
 
@@ -595,7 +588,7 @@ std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_pre
 
 int OctreeManager::loadOctomap(const std::string &filename)
 {
-  octomap_vpp::RoiOcTree *map = NULL;
+  octomap_vpp::RoiOcTree *map = nullptr;
   octomap::AbstractOcTree *tree =  octomap::AbstractOcTree::read(filename);
   if (!tree)
     return -1;

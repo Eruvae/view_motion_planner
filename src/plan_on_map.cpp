@@ -56,7 +56,7 @@ int main(int argc, char **argv)
   std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
   std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
 
-  constexpr bool UPDATE_PLANNING_TREE = false;
+  constexpr bool NO_PLANNING_TREE_UPDATE = false;
 
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool evaluate_results = nhp.param<bool>("evaluate", false);
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
-                            UPDATE_PLANNING_TREE, evaluate_results, eval_num_episodes, eval_episode_duration);
+                            NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, eval_episode_duration);
   ROS_INFO_STREAM("PLANNER CREATED");
 
   planner.getOctreeManager()->loadOctomap(argv[1]);
@@ -83,6 +83,7 @@ int main(int argc, char **argv)
   for(ros::Rate r(1); ros::ok(); r.sleep())
   {
     updateTrolleyPosition(trolley_br, js_pub, i*1.0, j*0.2);
+    planner.pathSearcherThread(ros::Time::now() + ros::Duration(60));
     ++i %= 30;
     ++j %= 11;
   }
