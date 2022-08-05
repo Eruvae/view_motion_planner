@@ -318,8 +318,8 @@ bool ViewMotionPlanner::executePath()
     if (!next_start_vertex)
     {
       ROS_ERROR("Camera pose not initialized");
-      return false;
     }
+    return false;
   }
   for (const auto &[next_vertex, traj, cost] : trajectories)
   {
