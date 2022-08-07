@@ -101,6 +101,8 @@ public:
   bool getRandomExplTarget(octomap::point3d &target);
   bool getRandomBorderTarget(octomap::point3d &target);
 
+  void updateTargets();
+
   ViewposePtr sampleRandomViewPose(TargetType type);
 
   //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);

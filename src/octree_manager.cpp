@@ -189,11 +189,7 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
   planningTree->insertRegionScan(inlierCloud, outlierCloud);
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insertStartTime) << " s");
   ros::Time updateTargetStartTime(ros::Time::now());
-  target_vector_mtx.lock();
-  updateRoiTargets();
-  updateExplTargets();
-  publishTargets();
-  target_vector_mtx.unlock();
+  updateTargets();
   ROS_INFO_STREAM("Updating targets took " << (ros::Time::now() - updateTargetStartTime) << " s");
   ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
   tree_mtx.unlock();
@@ -334,6 +330,15 @@ void OctreeManager::updateExplTargets()
 
   current_expl_targets = std::move(new_expl_targets);
   current_border_targets = std::move(new_border_targets);
+}
+
+// lock tree mutex before calling function
+void OctreeManager::updateTargets()
+{
+  boost::unique_lock lock(target_vector_mtx);
+  updateRoiTargets();
+  updateExplTargets();
+  publishTargets();
 }
 
 bool OctreeManager::getRandomRoiTarget(octomap::point3d &target)
@@ -602,6 +607,7 @@ int OctreeManager::loadOctomap(const std::string &filename)
   tree_mtx.lock();
   planningTree.reset(map);
   planningTree->computeRoiKeys();
+  updateTargets();
   tree_mtx.unlock();
   publishMap();
   return 0;
