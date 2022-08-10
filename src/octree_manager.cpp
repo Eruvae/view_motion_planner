@@ -390,7 +390,7 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
   }
   if (type == TARGET_BORDER)
   {
-    sample_target_success = getRandomExplTarget(origin);
+    sample_target_success = getRandomBorderTarget(origin);
   }
   if (!sample_target_success)
   {
