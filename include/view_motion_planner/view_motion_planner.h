@@ -178,6 +178,11 @@ public:
     return octree_manager.get();
   }
 
+  ViewposeGraphManager* getGraphManager()
+  {
+    return graph_manager.get();
+  }
+
   void updateConfig()
   {
     boost::recursive_mutex::scoped_lock lock(config_mutex);

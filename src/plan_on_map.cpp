@@ -25,6 +25,14 @@ void updateTrolleyPosition(tf2_ros::TransformBroadcaster &trolley_br, ros::Publi
   js_pub.publish(js);
 }
 
+void updateArmPosition(ros::Publisher &js_pub, double arm_elbow_joint=1.5708, double arm_shoulder_lift_joint=-0.7854, double arm_shoulder_pan_joint=0, double arm_wrist_1_joint=-0.7854, double arm_wrist_2_joint=0, double arm_wrist_3_joint=0)
+{
+  sensor_msgs::JointState js;
+  js.name.assign({"arm_elbow_joint", "arm_shoulder_lift_joint", "arm_shoulder_pan_joint", "arm_wrist_1_joint", "arm_wrist_2_joint", "arm_wrist_3_joint"});
+  js.position.assign({arm_elbow_joint, arm_shoulder_lift_joint, arm_shoulder_pan_joint, arm_wrist_1_joint, arm_wrist_2_joint, arm_wrist_3_joint});
+  js.header.stamp = ros::Time::now();
+  js_pub.publish(js);
+}
 
 int main(int argc, char **argv)
 {
@@ -66,7 +74,8 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
   tf2_ros::TransformBroadcaster trolley_br;
-  ros::Publisher js_pub = nh.advertise<sensor_msgs::JointState>("trolley_joint_states", 1);
+  ros::Publisher tjs_pub = nh.advertise<sensor_msgs::JointState>("trolley_joint_states", 1);
+  ros::Publisher ajs_pub = nh.advertise<sensor_msgs::JointState>("joint_states", 1);
 
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
                             robot_description_param_name, group_name, ee_link_name,
@@ -82,8 +91,10 @@ int main(int argc, char **argv)
   size_t i = 0, j = 0;
   for(ros::Rate r(1); ros::ok(); r.sleep())
   {
-    updateTrolleyPosition(trolley_br, js_pub, i*1.0, j*0.2);
+    updateTrolleyPosition(trolley_br, tjs_pub, i*1.0, j*0.2);
+    updateArmPosition(ajs_pub);
     planner.pathSearcherThread(ros::Time::now() + ros::Duration(60));
+    planner.getGraphManager()->clear();
     ++i %= 30;
     ++j %= 11;
   }

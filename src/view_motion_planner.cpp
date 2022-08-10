@@ -300,7 +300,9 @@ bool ViewMotionPlanner::searchPath()
 
     has_expanded = true;
   }
-  graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
+  if (config.visualize_graph && has_expanded)
+    graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
+
   return has_expanded;
 }
 
