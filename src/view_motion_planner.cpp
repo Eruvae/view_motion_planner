@@ -463,40 +463,44 @@ void ViewMotionPlanner::plannerLoop()
       octree_manager->resetEvaluator();
     }
   }
-  ROS_INFO_STREAM("ENTER MAIN LOOP");
-  for (ros::Rate rate(100); ros::ok(); rate.sleep())
+  else
   {
-    if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+    ROS_INFO_STREAM("ENTER MAIN LOOP");
+    for (ros::Rate rate(100); ros::ok(); rate.sleep())
     {
-      ROS_INFO_STREAM("Planning new segment");
-      graph_manager->clear();
-      pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
-      graph_manager->clear();
-      ROS_INFO_STREAM("Moving to home pose");
-      robot_manager->moveToHomePose();
-      trolley_current_segment++;
-      if (trolley_current_segment >= config.trolley_num_segments)
-        break;
-      ROS_INFO_STREAM("Moving trolley");
-      trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
-      for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+      if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+      {
+        ROS_INFO_STREAM("Planning new segment");
+        graph_manager->clear();
+        pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
+        graph_manager->clear();
+        ROS_INFO_STREAM("Moving to home pose");
+        robot_manager->moveToHomePose();
+        trolley_current_segment++;
+        if (trolley_current_segment >= config.trolley_num_segments)
+          break;
+        ROS_INFO_STREAM("Moving trolley");
+        trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
+        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
 
-    }
-    else if (config.mode >= Vmp_BUILD_GRAPH)
-    {
-      ROS_INFO_STREAM("PLANNER BUILD GRAPH AND PLAN");
-      pathSearcherThread();
-    }
-    else if (config.mode == Vmp_MAP_ONLY)
-    {
-      ROS_INFO_STREAM("PLANNER MAPPING");
-      octree_manager->waitForPointcloudWithRoi();
-    }
-    else
-    {
-      ROS_INFO_STREAM("PLANNER IDLING");
+      }
+      else if (config.mode >= Vmp_BUILD_GRAPH)
+      {
+        ROS_INFO_STREAM("PLANNER BUILD GRAPH AND PLAN");
+        pathSearcherThread();
+      }
+      else if (config.mode == Vmp_MAP_ONLY)
+      {
+        ROS_INFO_STREAM("PLANNER MAPPING");
+        octree_manager->waitForPointcloudWithRoi();
+      }
+      else
+      {
+        ROS_INFO_STREAM("PLANNER IDLING");
+      }
     }
   }
+
   /*for (ros::Rate rate(100); ros::ok(); rate.sleep())
   {
     plannerLoopOnce();
