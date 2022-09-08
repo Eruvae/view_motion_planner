@@ -758,6 +758,7 @@ void OctreeManager::setEvaluatorStartParams()
   eval_externalClusterFile << "Time (s),Plan duration (s),Plan Length,";
   external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step" << std::endl;
   eval_plannerStartTime = ros::Time::now();
+  eval_passedTime = 0;
   eval_accumulatedPlanDuration = 0;
   eval_accumulatedPlanLength = 0;
 }
@@ -779,26 +780,26 @@ bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
 {
   ros::Time currentTime = ros::Time::now();
 
-  double passed_time = (currentTime - eval_plannerStartTime).toSec();
+  eval_passedTime = (currentTime - eval_plannerStartTime).toSec();
 
   eval_accumulatedPlanDuration += traj_duration;
   eval_accumulatedPlanLength += plan_length;
 
-  rvp_evaluation::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(passed_time));
+  rvp_evaluation::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(eval_passedTime));
   rvp_evaluation::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
 
-  eval_resultsFile << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  eval_resultsFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
   evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << std::endl;
 
-  eval_resultsFileOld << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  eval_resultsFileOld << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
   evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << std::endl;
 
-  eval_externalClusterFile << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  eval_externalClusterFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
   external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << std::endl;
 
-  writeVector(eval_fruitCellPercFile, passed_time, res.fruit_cell_percentages) << std::endl;
-  writeVector(eval_volumeAccuracyFile, passed_time, res.volume_accuracies) << std::endl;
-  writeVector(eval_distanceFile, passed_time, res.distances) << std::endl;
+  writeVector(eval_fruitCellPercFile, eval_passedTime, res.fruit_cell_percentages) << std::endl;
+  writeVector(eval_volumeAccuracyFile, eval_passedTime, res.volume_accuracies) << std::endl;
+  writeVector(eval_distanceFile, eval_passedTime, res.distances) << std::endl;
 
   return true;
 }

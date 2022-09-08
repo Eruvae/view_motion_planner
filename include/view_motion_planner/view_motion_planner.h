@@ -134,7 +134,8 @@ public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                     const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                     const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
-                    bool update_planning_tree=true, bool evaluation_mode=false, size_t eval_num_episodes=20, double eval_episode_duration=120.0);
+                    bool update_planning_tree=true, bool evaluation_mode=false, size_t eval_num_episodes=20,
+                    EvalEpisodeEndParam ep=EvalEpisodeEndParam::TIME, double eval_episode_duration=120.0);
 
   ~ViewMotionPlanner();
 
@@ -153,6 +154,8 @@ public:
   bool searchPath();
 
   bool executePath();
+
+  void pathSearcherThread(EvalEpisodeEndParam ep, double duration);
 
   void pathSearcherThread(const ros::Time &end_time = ros::TIME_MAX);
 
@@ -203,6 +206,7 @@ private:
 
   bool evaluation_mode;
   size_t eval_num_episodes;
+  EvalEpisodeEndParam ep;
   double eval_episode_duration;
 
   VmpConfig config;

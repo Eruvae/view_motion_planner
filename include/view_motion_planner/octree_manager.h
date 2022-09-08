@@ -74,6 +74,7 @@ private:
   std::ofstream eval_volumeAccuracyFile;
   std::ofstream eval_distanceFile;
   ros::Time eval_plannerStartTime;
+  double eval_passedTime;
   double eval_accumulatedPlanDuration;
   double eval_accumulatedPlanLength;
   std::string eval_lastStep;
@@ -89,6 +90,21 @@ public:
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
                 std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000,
                 bool update_planning_tree=true, bool initialize_evaluator=false);
+
+  double getEvalPassedTime()
+  {
+    return eval_passedTime;
+  }
+
+  double getEvalAccPlanDuration()
+  {
+    return eval_accumulatedPlanDuration;
+  }
+
+  double getEvalAccPlanLength()
+  {
+    return eval_accumulatedPlanLength;
+  }
 
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
 

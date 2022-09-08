@@ -113,4 +113,12 @@ static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose
   return endpoints;
 }
 
+enum class EvalEpisodeEndParam
+{
+  TIME = 0,
+  PLAN_DURATION = 1,
+  PLAN_LENGTH = 2,
+  NUM_EPEND_PARAMS = 3
+};
+
 } // namespace view_motion_planner

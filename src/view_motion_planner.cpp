@@ -8,12 +8,13 @@ namespace view_motion_planner
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
                                      const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                                      const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
-                                     bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, double eval_episode_duration)
+                                     bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
   : random_engine(std::random_device{}()),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
     update_planning_tree(update_planning_tree),
     evaluation_mode(evaluation_mode),
     eval_num_episodes(eval_num_episodes),
+    ep(ep),
     eval_episode_duration(eval_episode_duration),
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
@@ -387,6 +388,41 @@ bool ViewMotionPlanner::executePath()
   return moved;
 }
 
+void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double duration)
+{
+  /*bool start_connected = */buildGraph();
+
+  if (config.mode < Vmp_PLAN && config.insert_scan_if_not_moved)
+    octree_manager->waitForPointcloudWithRoi();
+
+  while (ros::ok() && config.mode >= Vmp_PLAN)
+  {
+    if (!searchPath() || config.mode < Vmp_PLAN_AND_EXECUTE)
+    {
+      if (config.insert_scan_if_not_moved)
+        octree_manager->waitForPointcloudWithRoi();
+
+      break;
+    }
+
+    bool moved = executePath();
+
+    if (!moved && config.insert_scan_if_not_moved)
+      octree_manager->waitForPointcloudWithRoi();
+
+    if ( (ep == EvalEpisodeEndParam::TIME && octree_manager->getEvalPassedTime() > duration) ||
+         (ep == EvalEpisodeEndParam::PLAN_DURATION && octree_manager->getEvalAccPlanDuration() > duration) ||
+         (ep == EvalEpisodeEndParam::PLAN_LENGTH && octree_manager->getEvalAccPlanLength() > duration)
+       )
+    {
+      break;
+    }
+
+    resumeGraphBuilderThreads();
+    ros::Duration(config.graph_building_time).sleep();
+  }
+}
+
 void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
 {
   /*bool start_connected = */buildGraph();
@@ -453,8 +489,7 @@ void ViewMotionPlanner::plannerLoop()
     octree_manager->startEvaluator();
     for (size_t current_episode=0; ros::ok() && current_episode < eval_num_episodes; current_episode++)
     {
-      ros::Time end_time = ros::Time::now() + ros::Duration(eval_episode_duration);
-      pathSearcherThread(end_time);
+      pathSearcherThread(ep, eval_episode_duration);
       pauseGraphBuilderThreads();
       robot_manager->moveToHomePose();
       octree_manager->resetOctomap();

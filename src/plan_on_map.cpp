@@ -71,6 +71,11 @@ int main(int argc, char **argv)
   size_t eval_num_episodes = static_cast<size_t>(nhp.param<int>("episodes", 20));
   double eval_episode_duration = nhp.param<double>("duration", 120.0);
 
+  int eval_epend_param_int = nhp.param<int>("epend", 0);
+  EvalEpisodeEndParam ep = EvalEpisodeEndParam::TIME;
+  if (eval_epend_param_int == 1) ep = EvalEpisodeEndParam::PLAN_DURATION;
+  else if (eval_epend_param_int == 2) ep = EvalEpisodeEndParam::PLAN_LENGTH;
+
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
   tf2_ros::TransformBroadcaster trolley_br;
@@ -80,7 +85,7 @@ int main(int argc, char **argv)
   ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
-                            NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, eval_episode_duration);
+                            NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, ep, eval_episode_duration);
   ROS_INFO_STREAM("PLANNER CREATED");
 
   planner.getOctreeManager()->loadOctomap(argv[1]);
