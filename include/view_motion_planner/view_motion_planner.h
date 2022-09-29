@@ -11,7 +11,7 @@
 #include "view_motion_planner/viewpose_graph.h"
 #include "roi_viewpoint_planner_msgs/VmpConfig.h"
 
-#include "trolley_remote/trolley_remote.h"
+#include "view_motion_planner/trolley_remote.h"
 
 namespace view_motion_planner
 {

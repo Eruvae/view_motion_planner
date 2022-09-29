@@ -22,7 +22,8 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     robot_manager(new RobotManager(nh, tfBuffer, map_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, update_planning_tree, evaluation_mode)),
-    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config))
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config)),
+    trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
   vt_robot_state->loadMarkerPub(true);
@@ -432,13 +433,16 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
 
   while (ros::ok() && config.mode >= Vmp_PLAN && ros::Time::now() < end_time)
   {
-    if (!searchPath() || config.mode < Vmp_PLAN_AND_EXECUTE)
+    if (!searchPath())
     {
       if (config.insert_scan_if_not_moved)
         octree_manager->waitForPointcloudWithRoi();
 
-      break;
+      continue;
     }
+    
+    if (config.mode < Vmp_PLAN_AND_EXECUTE)
+      break;
 
     bool moved = executePath();
 
@@ -517,7 +521,18 @@ void ViewMotionPlanner::plannerLoop()
         ROS_INFO_STREAM("Moving trolley");
         trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
         for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
-
+        /*ROS_INFO_STREAM("Moving up");
+        double h = trolley_remote.getHeight();
+        ROS_INFO_STREAM("Height: " << h);
+        const double LIFT = 500;
+        static double sign = 1;
+        trolley_remote.liftTo(sign * LIFT);
+        ROS_INFO_STREAM("Lifting trolley");
+        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        ROS_INFO_STREAM("Trolley Ready");
+        config.mode = Vmp_IDLE;
+        sign *= -1;
+        updateConfig();*/
       }
       else if (config.mode >= Vmp_BUILD_GRAPH)
       {
@@ -531,7 +546,7 @@ void ViewMotionPlanner::plannerLoop()
       }
       else
       {
-        ROS_INFO_STREAM("PLANNER IDLING");
+        //ROS_INFO_STREAM("PLANNER IDLING");
       }
     }
   }

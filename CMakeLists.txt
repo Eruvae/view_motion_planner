@@ -26,7 +26,6 @@ set (CATKIN_DEPENDENCIES
     roi_viewpoint_planner_msgs
     rosbag_storage
     moveit_visual_tools
-    trolley_remote
 )
 
 ## Find catkin macros and libraries
@@ -167,6 +166,7 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/octree_manager.cpp
   src/robot_manager.cpp
   src/viewpose_graph.cpp
+  src/trolley_remote.cpp
 )
 
 ## Declare a C++ library

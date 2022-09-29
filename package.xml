@@ -71,7 +71,6 @@
   <depend>roi_viewpoint_planner_msgs</depend>
   <depend>rosbag_storage</depend>
   <depend>moveit_visual_tools</depend>
-  <depend>trolley_remote</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
