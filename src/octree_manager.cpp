@@ -199,7 +199,11 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
 void OctreeManager::waitForPointcloudWithRoi()
 {
   if (!update_planning_tree)
+  {
+    boost::unique_lock lock(tree_mtx);
+    updateTargets();
     return;
+  }
 
   pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh, ros::Duration());
   if (!msg)
