@@ -512,12 +512,18 @@ void ViewMotionPlanner::plannerLoop()
         ROS_INFO_STREAM("Planning new segment");
         graph_manager->clear();
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
+        const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";
+        octree_manager->saveOctomap(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true);
         graph_manager->clear();
         ROS_INFO_STREAM("Moving to home pose");
         robot_manager->moveToHomePose();
         trolley_current_segment++;
-        if (trolley_current_segment >= config.trolley_num_segments)
-          break;
+        if (trolley_current_segment >= config.trolley_num_segments) // end reached, go to idle
+        {
+          config.mode = Vmp_IDLE;
+          updateConfig();
+          continue;
+        }
         ROS_INFO_STREAM("Moving trolley");
         trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
         for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
