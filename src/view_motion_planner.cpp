@@ -438,7 +438,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
       if (config.insert_scan_if_not_moved)
         octree_manager->waitForPointcloudWithRoi();
 
-      continue;
+      break; // TODO: make configurable
     }
     
     if (config.mode < Vmp_PLAN_AND_EXECUTE)
