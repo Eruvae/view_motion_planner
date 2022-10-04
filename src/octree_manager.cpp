@@ -290,6 +290,9 @@ void OctreeManager::updateRoiTargets()
   octomap::KeySet freeNeighbours;
   for (const octomap::OcTreeKey &key : roi)
   {
+    if (samplingTree->search(transformToWorkspace(planningTree->keyToCoord(key))) == nullptr) // ROI not in sampling region
+      continue;
+
     planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_18);
   }
   for (const octomap::OcTreeKey &key : freeNeighbours)
