@@ -527,6 +527,7 @@ void ViewMotionPlanner::plannerLoop()
         ROS_INFO_STREAM("Moving trolley");
         trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
         for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        ros::Duration(2).sleep(); // wait for transform to update
         octree_manager->waitForPointcloudWithRoi();
         /*ROS_INFO_STREAM("Moving up");
         double h = trolley_remote.getHeight();
