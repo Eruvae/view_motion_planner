@@ -243,6 +243,12 @@ bool RobotManager::moveToRandomTarget(bool async, const ros::Duration &timeout)
   return success;
 }
 
+bool RobotManager::moveToNamedPose(const std::string &pose_name, bool async)
+{
+  manipulator_group.setNamedTarget(pose_name);
+  return planAndExecute(async);
+}
+
 bool RobotManager::moveToHomePose(bool async)
 {
   manipulator_group.setNamedTarget("home");

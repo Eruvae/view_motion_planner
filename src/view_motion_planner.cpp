@@ -474,6 +474,17 @@ void ViewMotionPlanner::resumeGraphBuilderThreads()
   graph_builder_condition.resume();
 }
 
+void ViewMotionPlanner::exploreNamedPoses()
+{
+  const std::string pose_list[] = {"zero", "halfup", "up", "halfleftfront", "front", "frontlookright", "halfhomefront", "home"};
+
+  for (const std::string &pose : pose_list)
+  {
+    robot_manager->moveToNamedPose(pose);
+    octree_manager->waitForPointcloudWithRoi();
+  }
+}
+
 void ViewMotionPlanner::plannerLoop()
 {    
   ROS_INFO_STREAM("PLANNER LOOP CALLED");
@@ -507,9 +518,18 @@ void ViewMotionPlanner::plannerLoop()
     ROS_INFO_STREAM("ENTER MAIN LOOP");
     for (ros::Rate rate(100); ros::ok(); rate.sleep())
     {
-      if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+      if (config.mode == Vmp_EXPLORE_NAMED_POSES)
       {
-        ROS_INFO_STREAM("Planning new segment");
+        ROS_INFO_STREAM("Explore named poses");
+        exploreNamedPoses();
+        config.mode = Vmp_IDLE;
+        updateConfig();
+      }
+      else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+      {
+        ROS_INFO_STREAM("Explore named poses for segment");
+        exploreNamedPoses();
+        ROS_INFO_STREAM("Planning new segment");     
         graph_manager->clear();
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
         const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";

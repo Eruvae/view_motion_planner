@@ -167,6 +167,8 @@ public:
 
   void resumeGraphBuilderThreads();
 
+  void exploreNamedPoses();
+
   void plannerLoop();
 
   //bool plannerLoopOnce(); // returns true if moved
