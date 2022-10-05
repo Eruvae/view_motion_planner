@@ -40,6 +40,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
   resetVoxbloxMapClient = nh.serviceClient<std_srvs::Empty>("/voxblox_node/clear_map");
 
+  past_viewposes_.reserve(1000);
+
   // Load workspace
 
   octomap::AbstractOcTree *tree = octomap::AbstractOcTree::read(wstree_file);
@@ -465,6 +467,12 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
 
   vp->pose.position = octomap::pointOctomapToMsg(end);
   vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
+  vp->origin = origin; 
+  vp->dir_vec = (end - origin).normalize();
+  if(isViewpointSimilarToPastViewpoints(past_viewposes_, vp))
+  {
+    return nullptr;
+  }
 
   vp->state = robot_manager->getPoseRobotState(transformToWorkspace(vp->pose));
   vp->type = type;

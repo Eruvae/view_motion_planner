@@ -83,6 +83,8 @@ private:
   ros::ServiceClient resetVoxbloxMapClient;
   std_srvs::Empty emptySrv;
 
+  std::vector<ViewposePtr> past_viewposes_;
+
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
 public:
@@ -244,6 +246,43 @@ public:
   void setEvaluatorStartParams();
   bool saveEvaluatorData(double plan_length, double traj_duration);
   bool resetEvaluator();
+
+  inline bool isViewpointSimilarToPastViewpoints(const std::vector<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 100)
+  {
+      num_vp = std::min(vp_vec.size(), num_vp);
+      curr_vp->vp_dissimilarity_index = 1.0;
+      for(size_t i = 0; i < num_vp; ++i)
+      {
+          ViewposePtr past_vp = vp_vec[i];
+          curr_vp->vp_dissimilarity_index = fmin(computeViewpointDissimilarity(past_vp, curr_vp), curr_vp->vp_dissimilarity_index);
+          if(curr_vp->vp_dissimilarity_index < this->config.vpd_threshold)
+          {
+              ROS_DEBUG_STREAM("\t VP similar to past viewpoints: "<<curr_vp->vp_dissimilarity_index<<" nearness index: "<<curr_vp->vp_dissimilarity_distance<<" cosine distance: "<<curr_vp->vp_dissimilarity_angle);
+              return true;
+          }
+      }
+      return false;
+  }
+
+  inline double computeViewpointDissimilarity(const ViewposePtr vp1, ViewposePtr vp2)
+  {
+      vp2->vp_dissimilarity_distance = 1.0;
+      vp2->vp_dissimilarity_angle = 1.0;
+
+      double cosine_similarity = vp1->dir_vec.dot(vp2->dir_vec);
+      vp2->vp_dissimilarity_angle = fmin(1- cosine_similarity, 2.0);
+      if(vp2->vp_dissimilarity_angle > 1.0)
+      {
+          return 1.0;
+      } 
+      vp2->vp_dissimilarity_distance = fmin((vp1->origin - vp2->origin).norm()/this->config.vpd_dist_scaling, 2.0);
+      if (vp2->vp_dissimilarity_distance > 1.0)
+      {
+          return 1.0; //(vp2.vp_dissimilarity_distance; 
+      }
+      vp2->vp_dissimilarity_index = fmin(vp2->vp_dissimilarity_distance*vp2->vp_dissimilarity_angle, 1.0);
+      return vp2->vp_dissimilarity_index;
+  }
 };
 
 } // namespace view_motion_planner

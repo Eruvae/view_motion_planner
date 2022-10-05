@@ -6,6 +6,7 @@
 #include <geometry_msgs/Pose.h>
 #include <octomap/OcTreeKey.h>
 #include "roi_viewpoint_planner_msgs/VmpConfig.h"
+#include <octomap/octomap_types.h>
 
 namespace view_motion_planner
 {
@@ -39,6 +40,11 @@ struct Viewpose
   size_t target_verts_on_path = 0;
   size_t total_verts_on_path = 0;
   bool visited = false;
+  octomap::point3d origin;
+  octomath::Vector3 dir_vec;
+  double vp_dissimilarity_index;
+  double vp_dissimilarity_distance;
+  double vp_dissimilarity_angle;
 
   void addPredecessor(ViewposePtr pred, TrajectoryPtr pred_edge)
   {
