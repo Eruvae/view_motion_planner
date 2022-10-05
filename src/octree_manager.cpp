@@ -40,7 +40,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
   resetVoxbloxMapClient = nh.serviceClient<std_srvs::Empty>("/voxblox_node/clear_map");
 
-  past_viewposes_.reserve(1000);
+  //past_viewposes_.reserve(1000);
 
   // Load workspace
 

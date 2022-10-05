@@ -83,7 +83,7 @@ private:
   ros::ServiceClient resetVoxbloxMapClient;
   std_srvs::Empty emptySrv;
 
-  std::vector<ViewposePtr> past_viewposes_;
+  std::deque<ViewposePtr> past_viewposes_;
 
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
@@ -247,7 +247,7 @@ public:
   bool saveEvaluatorData(double plan_length, double traj_duration);
   bool resetEvaluator();
 
-  inline bool isViewpointSimilarToPastViewpoints(const std::vector<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 100)
+  inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 100)
   {
       num_vp = std::min(vp_vec.size(), num_vp);
       curr_vp->vp_dissimilarity_index = 1.0;
@@ -282,6 +282,18 @@ public:
       }
       vp2->vp_dissimilarity_index = fmin(vp2->vp_dissimilarity_distance*vp2->vp_dissimilarity_angle, 1.0);
       return vp2->vp_dissimilarity_index;
+  }
+
+  inline void updatePastViewposesList(const ViewposePtr vp1)
+  {
+    if(past_viewposes_.size() < 1000)
+    {
+      past_viewposes_.push_back(vp1);
+    }
+    else
+    {
+      past_viewposes_.pop_front();
+    }
   }
 };
 
