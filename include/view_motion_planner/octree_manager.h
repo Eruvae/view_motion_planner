@@ -247,7 +247,7 @@ public:
   bool saveEvaluatorData(double plan_length, double traj_duration);
   bool resetEvaluator();
 
-  inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 100)
+  inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 500)
   {
       num_vp = std::min(vp_vec.size(), num_vp);
       curr_vp->vp_dissimilarity_index = 1.0;
@@ -293,7 +293,13 @@ public:
     else
     {
       past_viewposes_.pop_front();
+      past_viewposes_.push_back(vp1);
     }
+  }
+
+  inline void clearPastViewposesList()
+  {
+    past_viewposes_.clear();
   }
 };
 

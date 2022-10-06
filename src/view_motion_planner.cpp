@@ -527,6 +527,7 @@ void ViewMotionPlanner::plannerLoop()
       }
       else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
       {
+        octree_manager->clearPastViewposesList();
         ROS_INFO_STREAM("Explore named poses for segment");
         exploreNamedPoses();
         ROS_INFO_STREAM("Planning new segment");     
