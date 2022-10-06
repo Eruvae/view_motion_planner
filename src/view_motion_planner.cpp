@@ -478,7 +478,7 @@ void ViewMotionPlanner::resumeGraphBuilderThreads()
 
 void ViewMotionPlanner::exploreNamedPoses()
 {
-  const std::string pose_list[] = {"explpose1", "explpose2", "explpose3", "explpose4", "home"};
+  const std::string pose_list[] = {"explpose1", "explpose2", "explpose3", "explpose4", "explpose5", "home"};
 
   for (const std::string &pose : pose_list)
   {
