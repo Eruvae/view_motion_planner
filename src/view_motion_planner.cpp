@@ -327,6 +327,7 @@ bool ViewMotionPlanner::executePath()
   }
   for (const auto &[next_vertex, traj, cost] : trajectories)
   {
+    ViewposePtr vp = graph_manager->getGraph()[next_vertex];
     if (!traj)
     {
       ROS_WARN_STREAM("No trajectory found");
@@ -377,6 +378,7 @@ bool ViewMotionPlanner::executePath()
       }
       else
       {
+        octree_manager->updatePastViewposesList(vp);
         next_start_vertex = next_vertex;
       }
     }
