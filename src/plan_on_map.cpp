@@ -82,7 +82,7 @@ int main(int argc, char **argv)
   ros::Publisher tjs_pub = nh.advertise<sensor_msgs::JointState>("trolley_joint_states", 1);
   ros::Publisher ajs_pub = nh.advertise<sensor_msgs::JointState>("joint_states", 1);
 
-  ViewMotionPlanner planner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
+  ViewMotionPlanner planner(nh, tfBuffer, map_frame, ws_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
                             NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, ep, eval_episode_duration);

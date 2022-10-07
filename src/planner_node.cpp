@@ -50,9 +50,6 @@ int main(int argc, char **argv)
   else
     nhp.setParam("tree_resolution", 0.01);
 
-  std::string wstree_default_package = ros::package::getPath("ur_with_cam_gazebo");
-  std::string wstree_file = nh.param<std::string>("/roi_viewpoint_planner/workspace_tree", wstree_default_package + "/workspace_trees/static/workspace_map.ot");
-  std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
   std::string robot_description_param_name = nh.param<std::string>("/roi_viewpoint_planner/robot_description_param_name", "robot_description");
@@ -73,7 +70,7 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  planner = new ViewMotionPlanner(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame,
+  planner = new ViewMotionPlanner(nh, tfBuffer, map_frame, ws_frame,
                                   robot_description_param_name, group_name, ee_link_name,
                                   tree_resolution, num_graph_builder_threads,
                                   update_planning_tree, evaluate_results, eval_num_episodes, ep, eval_episode_duration);

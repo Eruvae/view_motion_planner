@@ -131,13 +131,17 @@ public:
 class ViewMotionPlanner
 {
 public:
-  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                     const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                     const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
                     bool update_planning_tree=true, bool evaluation_mode=false, size_t eval_num_episodes=20,
                     EvalEpisodeEndParam ep=EvalEpisodeEndParam::TIME, double eval_episode_duration=120.0);
 
   ~ViewMotionPlanner();
+
+  void publishWorkspaceMarker();
+
+  void publishSamplingRegionMarker();
 
   void poseVisualizeThread();
 
@@ -200,6 +204,9 @@ public:
   }
 
 private:
+  const std::string map_frame;
+  const std::string ws_frame;
+
   std::default_random_engine random_engine;
 
   const size_t NUM_GRAPH_BUILDER_THREADS;
@@ -219,6 +226,8 @@ private:
   // For visualizing things in rviz
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
   rviz_visual_tools::RvizVisualToolsPtr vt_searched_graph;
+  ros::Publisher workspacePub;
+  ros::Publisher samplingRegionPub;
 
   std::shared_ptr<RobotManager> robot_manager;
   moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;

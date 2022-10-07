@@ -5,11 +5,13 @@
 namespace view_motion_planner
 {
 
-ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                                      const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                                      const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
                                      bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
   : random_engine(std::random_device{}()),
+    map_frame(map_frame),
+    ws_frame(ws_frame),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
     update_planning_tree(update_planning_tree),
     evaluation_mode(evaluation_mode),
@@ -21,10 +23,12 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    octree_manager(new OctreeManager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, update_planning_tree, evaluation_mode)),
+    octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, config, 100, update_planning_tree, evaluation_mode)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, config)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
+  workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);
+  samplingRegionPub = nh.advertise<visualization_msgs::Marker>("samplingRegion", 1, true);
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
   vt_robot_state->loadMarkerPub(true);
   vt_robot_state->loadRobotStatePub("planned_state");
@@ -105,7 +109,101 @@ void ViewMotionPlanner::reconfigureCallback(VmpConfig &config, uint32_t level)
       }
     }
   }
+
+  bool publish_workspace = false;
+  bool publish_sampling_region = false;
+
+  // Adjust workspace/sampling region if necessary
+  if (level & (1 << 16)) // workspace minimum
+  {
+    if (config.ws_max_x < config.ws_min_x)
+      config.ws_max_x = config.ws_min_x;
+    if (config.ws_max_y < config.ws_min_y)
+      config.ws_max_y = config.ws_min_y;
+    if (config.ws_max_z < config.ws_min_z)
+      config.ws_max_z = config.ws_min_z;
+
+    publish_workspace = true;
+  }
+  else if (level & (1 << 17)) // workspace maximum
+  {
+    if (config.ws_min_x > config.ws_max_x)
+      config.ws_min_x = config.ws_max_x;
+    if (config.ws_min_y > config.ws_max_y)
+      config.ws_min_y = config.ws_max_y;
+    if (config.ws_min_z > config.ws_max_z)
+      config.ws_min_z = config.ws_max_z;
+
+    publish_workspace = true;
+  }
+
+  if (level & (1 << 18)) // sampling region minimum
+  {
+    if (config.sr_max_x < config.sr_min_x)
+      config.sr_max_x = config.sr_min_x;
+    if (config.sr_max_y < config.sr_min_y)
+      config.sr_max_y = config.sr_min_y;
+    if (config.sr_max_z < config.sr_min_z)
+      config.sr_max_z = config.sr_min_z;
+
+    publish_sampling_region = true;
+  }
+  else if (level & (1 << 19)) // sampling region maximum
+  {
+    if (config.sr_min_x > config.sr_max_x)
+      config.sr_min_x = config.sr_max_x;
+    if (config.sr_min_y > config.sr_max_y)
+      config.sr_min_y = config.sr_max_y;
+    if (config.sr_min_z > config.sr_max_z)
+      config.sr_min_z = config.sr_max_z;
+
+    publish_sampling_region = true;
+  }
+
   this->config = config;
+
+  if (publish_workspace) publishWorkspaceMarker();
+  if (publish_sampling_region) publishSamplingRegionMarker();
+}
+
+void ViewMotionPlanner::publishWorkspaceMarker()
+{
+  visualization_msgs::Marker cube_msg;
+  cube_msg.header.frame_id = ws_frame;
+  cube_msg.header.stamp = ros::Time::now();
+  cube_msg.ns = "workspace";
+  cube_msg.id = 0;
+  cube_msg.type = visualization_msgs::Marker::LINE_LIST;
+  cube_msg.color = COLOR_RED;
+  cube_msg.scale.x = 0.01;
+  cube_msg.pose.orientation.w = 1.0; // normalize quaternion
+
+  octomap::point3d min(config.ws_min_x, config.ws_min_y, config.ws_min_z);
+  octomap::point3d max(config.ws_max_x, config.ws_max_y, config.ws_max_z);
+  ROS_ERROR_STREAM("WS: " << min << max);
+  addCubeEdges(min, max, cube_msg.points);
+
+  workspacePub.publish(cube_msg);
+}
+
+void ViewMotionPlanner::publishSamplingRegionMarker()
+{
+  visualization_msgs::Marker cube_msg;
+  cube_msg.header.frame_id = ws_frame;
+  cube_msg.header.stamp = ros::Time::now();
+  cube_msg.ns = "samplingRegion";
+  cube_msg.id = 0;
+  cube_msg.type = visualization_msgs::Marker::LINE_LIST;
+  cube_msg.color = COLOR_GREEN;
+  cube_msg.scale.x = 0.01;
+  cube_msg.pose.orientation.w = 1.0; // normalize quaternion
+
+  octomap::point3d min(config.sr_min_x, config.sr_min_y, config.sr_min_z);
+  octomap::point3d max(config.sr_max_x, config.sr_max_y, config.sr_max_z);
+  ROS_ERROR_STREAM("SR: " << min << max);
+  addCubeEdges(min, max, cube_msg.points);
+
+  samplingRegionPub.publish(cube_msg);
 }
 
 void ViewMotionPlanner::poseVisualizeThread()

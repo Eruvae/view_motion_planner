@@ -34,10 +34,6 @@ private:
 
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
-  std::shared_ptr<octomap_vpp::WorkspaceOcTree> workspaceTree;
-  std::shared_ptr<octomap_vpp::WorkspaceOcTree> samplingTree;
-  octomap::point3d wsMin, wsMax;
-  octomap::point3d stMin, stMax;
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> observationRegions;
   std::shared_ptr<rvp_evaluation::GtOctreeLoader> gtLoader;
   std::unique_ptr<rvp_evaluation::Evaluator> evaluator;
@@ -47,8 +43,6 @@ private:
   const std::string map_frame;
   const std::string ws_frame;
   ros::Publisher octomapPub;
-  ros::Publisher workspaceTreePub;
-  ros::Publisher samplingTreePub;
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
   ros::Publisher targetPub;
@@ -88,7 +82,7 @@ private:
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
 public:
-  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
                 std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000,
                 bool update_planning_tree=true, bool initialize_evaluator=false);
@@ -177,9 +171,9 @@ public:
 
   octomap::point3d sampleRandomWorkspacePoint()
   {
-    std::uniform_real_distribution<float> x_dist(wsMin.x(), wsMax.x());
-    std::uniform_real_distribution<float> y_dist(wsMin.y(), wsMax.y());
-    std::uniform_real_distribution<float> z_dist(wsMin.z(), wsMax.z());
+    std::uniform_real_distribution<float> x_dist(config.ws_min_x, config.ws_max_x);
+    std::uniform_real_distribution<float> y_dist(config.ws_min_y, config.ws_max_y);
+    std::uniform_real_distribution<float> z_dist(config.ws_min_z, config.ws_max_z);
     octomap::point3d target(x_dist(random_engine), y_dist(random_engine), z_dist(random_engine));
     return target;
   }
@@ -226,6 +220,20 @@ public:
     PointT pt;
     tf2::doTransform(p, pt, trans);
     return pt;
+  }
+
+  bool isInWorkspace(const octomap::point3d &p)
+  {
+    return (p.x() >= config.ws_min_x && p.x() <= config.ws_max_x &&
+            p.y() >= config.ws_min_y && p.y() <= config.ws_max_y &&
+            p.z() >= config.ws_min_z && p.z() <= config.ws_max_z);
+  }
+
+  bool isInSamplingRegion(const octomap::point3d &p)
+  {
+    return (p.x() >= config.sr_min_x && p.x() <= config.sr_max_x &&
+            p.y() >= config.sr_min_y && p.y() <= config.sr_max_y &&
+            p.z() >= config.sr_min_z && p.z() <= config.sr_max_z);
   }
 
   std::string saveOctomap(const std::string &name = "planningTree", bool name_is_prefix = true);
