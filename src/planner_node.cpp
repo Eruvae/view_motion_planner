@@ -3,7 +3,19 @@
 #include <roi_viewpoint_planner_msgs/SaveOctomap.h>
 #include <roi_viewpoint_planner_msgs/LoadOctomap.h>
 #include "view_motion_planner/view_motion_planner.h"
+#include <roi_viewpoint_planner_msgs/SaveCurrentRobotState.h>
+#include <sensor_msgs/JointState.h>
 
+#include <cstdlib>
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+
+#include <urdf/model.h>
+#include <srdfdom/srdf_writer.h>
+#include "urdf_parser/urdf_parser.h"
+
+namespace fs = std::filesystem;
 
 
 using namespace view_motion_planner;
@@ -35,6 +47,60 @@ bool resetOctomap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
   planner->getOctreeManager()->resetOctomap();
   return true;
 }
+
+bool saveCurrentRobotState(roi_viewpoint_planner_msgs::SaveCurrentRobotState::Request& req,roi_viewpoint_planner_msgs::SaveCurrentRobotState::Response& res)
+{
+  std::string package_path = ros::package::getPath	("phenorob_ur5e");
+  ROS_INFO_STREAM("Package path: "<<package_path); 
+  std::string srdf_file_location = package_path + "/config/platform_base/";
+  std::string srdf_filename = "phenorob_ur5e.srdf";
+  fs::copy(srdf_file_location + srdf_filename, srdf_file_location + "phenorob_ur5e_bkup.srdf", fs::copy_options::update_existing); // copy file
+
+  ros::NodeHandle nh;
+  std::string urdf_xml, srdf_xml, group_name;
+  nh.getParam("/robot_description", urdf_xml); 
+  nh.getParam("/robot_description_semantic", srdf_xml); 
+  nh.param<std::string>("/roi_viewpoint_planner/group_name", group_name, "manipulator"); 
+  ROS_INFO_STREAM("3");
+
+  urdf::ModelInterfaceSharedPtr urdf_model = urdf::parseURDF(urdf_xml);
+  ROS_INFO_STREAM("4");
+  srdf::SRDFWriter srdf_writer_;
+  srdf::Model srdf_model; 
+  srdf_model.initFile(*urdf_model, srdf_file_location + srdf_filename);
+  ROS_INFO_STREAM("4.1");
+
+  srdf_writer_.initModel(*urdf_model, srdf_model);
+
+  boost::shared_ptr<sensor_msgs::JointState const> joint_state = ros::topic::waitForMessage<sensor_msgs::JointState>(std::string("/joint_states"), ros::Duration(1.0));
+  srdf::Model::GroupState group_state;
+  group_state.group_ = group_name;
+  group_state.name_  = req.pose_name;
+
+  const sensor_msgs::JointState js = *joint_state;
+
+  for(unsigned i = 0; i < js.name.size(); ++i)
+  {
+    if(js.name[i].find("arm") != std::string::npos)
+    {
+        std::vector<double> value(1);
+        value[0] = js.position[i];
+        group_state.joint_values_.insert(std::pair<std::string, std::vector<double>>(js.name[i], value));
+    }
+  }
+  srdf_writer_.group_states_.push_back(group_state);
+  srdf_writer_.writeSRDF(srdf_file_location + srdf_filename);
+
+  /*auto new_srdf_xml_string = srdf_writer_->getSRDFString();
+  std::ofstream file(srdf_file_location + srdf_filename + "new");
+  ROS_INFO_STREAM("1");
+  file<<new_srdf_xml_string;
+  ROS_INFO_STREAM("2");
+  file.close();*/
+  
+  return true;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -81,6 +147,8 @@ int main(int argc, char **argv)
   ros::ServiceServer saveOctomapService = nh.advertiseService("/roi_viewpoint_planner/save_octomap", saveOctomap);
   ros::ServiceServer loadOctomapService = nh.advertiseService("/roi_viewpoint_planner/load_octomap", loadOctomap);
   ros::ServiceServer resetOctomapService = nh.advertiseService("/roi_viewpoint_planner/reset_octomap", resetOctomap);
+  ros::ServiceServer saveCurrentRobotStateService = nh.advertiseService("/roi_viewpoint_planner/save_robot_state", saveCurrentRobotState);
+
 
   ROS_INFO_STREAM("PLANNER CREATED");
   planner->getRobotManager()->moveToHomePose();

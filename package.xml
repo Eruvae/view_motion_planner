@@ -71,7 +71,10 @@
   <depend>roi_viewpoint_planner_msgs</depend>
   <depend>rosbag_storage</depend>
   <depend>moveit_visual_tools</depend>
-
+  <depend>moveit_setup_assistant</depend>
+  <depend version_gt="0.3.1">srdfdom</depend>
+  <depend>urdf</depend>
+  <depend>yaml-cpp</depend>
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->
