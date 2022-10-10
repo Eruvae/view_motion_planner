@@ -523,6 +523,7 @@ void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double durati
     resumeGraphBuilderThreads();
     ros::Duration(config.graph_building_time).sleep();
   }
+  pauseGraphBuilderThreads();
 }
 
 void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
@@ -553,6 +554,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     resumeGraphBuilderThreads();
     ros::Duration(config.graph_building_time).sleep();
   }
+  pauseGraphBuilderThreads();
 }
 
 void ViewMotionPlanner::initGraphBuilderThreads()
@@ -630,8 +632,11 @@ void ViewMotionPlanner::plannerLoop()
       else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
       {
         octree_manager->clearPastViewposesList();
-        ROS_INFO_STREAM("Explore named poses for segment");
-        exploreNamedPoses();
+	if (config.trolley_plan_named_poses)
+	{
+          ROS_INFO_STREAM("Explore named poses for segment");
+          exploreNamedPoses();
+	}
         ROS_INFO_STREAM("Planning new segment");     
         graph_manager->clear();
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
@@ -650,7 +655,7 @@ void ViewMotionPlanner::plannerLoop()
         ROS_INFO_STREAM("Moving trolley");
         trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
         for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
-        ros::Duration(2).sleep(); // wait for transform to update
+        ros::Duration(5).sleep(); // wait for transform to update
         octree_manager->waitForPointcloudWithRoi();
         /*ROS_INFO_STREAM("Moving up");
         double h = trolley_remote.getHeight();
