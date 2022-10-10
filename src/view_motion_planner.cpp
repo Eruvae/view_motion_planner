@@ -9,7 +9,8 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
                                      const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
                                      const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
                                      bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
-  : random_engine(std::random_device{}()),
+  : nh_(nh),
+    random_engine(std::random_device{}()),
     map_frame(map_frame),
     ws_frame(ws_frame),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
@@ -576,7 +577,8 @@ void ViewMotionPlanner::resumeGraphBuilderThreads()
 
 void ViewMotionPlanner::exploreNamedPoses()
 {
-  const std::string pose_list[] = {"explpose1", "explpose2", "explpose3", "explpose4", "explpose5", "home"};
+  std::vector<std::string> pose_list;
+  nh_.param<std::vector<std::string>>("view_motion_planner/pose_list", pose_list, {"explpose1", "explpose2", "explpose3", "explpose4", "explpose5", "home"});
 
   for (const std::string &pose : pose_list)
   {

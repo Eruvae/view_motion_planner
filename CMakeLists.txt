@@ -26,6 +26,9 @@ set (CATKIN_DEPENDENCIES
     roi_viewpoint_planner_msgs
     rosbag_storage
     moveit_visual_tools
+    moveit_setup_assistant
+    urdf
+    srdfdom
 )
 
 ## Find catkin macros and libraries

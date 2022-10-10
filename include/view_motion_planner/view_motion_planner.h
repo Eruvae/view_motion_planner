@@ -251,6 +251,8 @@ private:
 
   trolley_remote::TrolleyRemote trolley_remote;
   int trolley_current_segment = 0;
+
+  ros::NodeHandle nh_;
 };
 
 } // namespace view_motion_planner
