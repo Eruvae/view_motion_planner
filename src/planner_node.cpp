@@ -35,7 +35,7 @@ bool saveOctomap(roi_viewpoint_planner_msgs::SaveOctomap::Request &req, roi_view
 
 bool loadOctomap(roi_viewpoint_planner_msgs::LoadOctomap::Request &req, roi_viewpoint_planner_msgs::LoadOctomap::Response &res)
 {
-  int err_code = planner->getOctreeManager()->loadOctomap(req.filename);
+  int err_code = planner->getOctreeManager()->loadOctomap(req.filename, req.offset);
   res.success = (err_code == 0);
   if (err_code == -1) res.error_message = "Deserialization failed";
   else if (err_code == -2) res.error_message = "Wrong Octree type";

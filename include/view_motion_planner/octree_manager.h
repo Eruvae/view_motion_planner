@@ -238,7 +238,9 @@ public:
 
   std::string saveOctomap(const std::string &name = "planningTree", bool name_is_prefix = true);
 
-  int loadOctomap(const std::string &filename);
+  void moveOctomap(octomap_vpp::RoiOcTree* &tree, const geometry_msgs::Transform &offset);
+
+  int loadOctomap(const std::string &filename, const geometry_msgs::Transform &offset=geometry_msgs::Transform());
 
   void resetOctomap();
 

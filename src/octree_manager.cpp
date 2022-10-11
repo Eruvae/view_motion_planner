@@ -501,7 +501,47 @@ std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_pre
   return result ? fName.str() : "";
 }
 
-int OctreeManager::loadOctomap(const std::string &filename)
+void OctreeManager::moveOctomap(octomap_vpp::RoiOcTree* &tree, const geometry_msgs::Transform &offset)
+{
+  bool translate_tree = (offset.translation.x != 0 || offset.translation.y != 0 || offset.translation.z != 0);
+  bool rotate_tree =  (offset.rotation.x != 0 || offset.rotation.y != 0 || offset.rotation.z != 0);
+
+  if (!translate_tree && !rotate_tree)
+    return;
+
+  octomap_vpp::RoiOcTree *moved_tree(new octomap_vpp::RoiOcTree(tree->getResolution()));
+
+  if (!rotate_tree) // no rotation needed, simply offset keys
+  {
+    const octomap::OcTreeKey ZERO_KEY = tree->coordToKey(0, 0, 0);
+    const octomap::OcTreeKey OFFSET_KEY = tree->coordToKey(offset.translation.x, offset.translation.y, offset.translation.z);
+    auto addOffset = [&ZERO_KEY, &OFFSET_KEY](const octomap::OcTreeKey &key)
+    {
+      return octomap::OcTreeKey(key[0] - ZERO_KEY[0] + OFFSET_KEY[0], key[1] - ZERO_KEY[1] + OFFSET_KEY[1], key[2] - ZERO_KEY[2] + OFFSET_KEY[2]);
+    };
+    for (auto it = tree->begin_leafs(), end = tree->end_leafs(); it != end; it++)
+    {
+      octomap::OcTreeKey insertKey = addOffset(it.getKey());
+      octomap_vpp::RoiOcTreeNode *node = moved_tree->setNodeValue(insertKey, it->getLogOdds(), true);
+      node->setRoiLogOdds(it->getRoiLogOdds());
+    }
+  }
+  else // fully transform coordinate
+  {
+    octomap::pose6d transform = octomap_vpp::transformToOctomath(offset);
+    for (auto it = tree->begin_leafs(), end = tree->end_leafs(); it != end; it++)
+    {
+      octomap::point3d insertPoint = transform.transform(it.getCoordinate());
+      octomap_vpp::RoiOcTreeNode *node = moved_tree->setNodeValue(insertPoint, it->getLogOdds(), true);
+      node->setRoiLogOdds(it->getRoiLogOdds());
+    }
+  }
+
+  delete tree;
+  tree = moved_tree;
+}
+
+int OctreeManager::loadOctomap(const std::string &filename, const geometry_msgs::Transform &offset)
 {
   octomap_vpp::RoiOcTree *map = nullptr;
   octomap::AbstractOcTree *tree =  octomap::AbstractOcTree::read(filename);
@@ -514,6 +554,9 @@ int OctreeManager::loadOctomap(const std::string &filename)
     delete tree;
     return -2;
   }
+
+  moveOctomap(map, offset);
+
   tree_mtx.lock();
   planningTree.reset(map);
   planningTree->computeRoiKeys();
