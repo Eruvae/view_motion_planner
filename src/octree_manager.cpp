@@ -102,10 +102,10 @@ void OctreeManager::waitForPointcloudWithRoi()
     return;
   }
 
-  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh, ros::Duration());
+  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh, ros::Duration(2.0));
   if (!msg)
   {
-    ROS_WARN_STREAM("Pointcloud message not received");
+    ROS_ERROR_STREAM("Pointcloud message not received");
     return;
   }
   registerPointcloudWithRoi(msg);
