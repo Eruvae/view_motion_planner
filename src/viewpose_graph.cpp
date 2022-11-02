@@ -21,41 +21,55 @@ ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &
                                            const std::shared_ptr<OctreeManager> &octree_manager,
                                            const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
                                            const VmpConfig &config)
-  : config(config), robot_manager(robot_manager), octree_manager(octree_manager), neighbor_data(new ompl::NearestNeighborsGNAT<Vertex>()),
+  : config(config), robot_manager(robot_manager), octree_manager(octree_manager),
+    neighbors_joint(new ompl::NearestNeighborsGNAT<ViewposePtr>()), neighbors_vpsim(new ompl::NearestNeighborsGNAT<ViewposePtr>()),
     vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this))
 {
-  neighbor_data->setDistanceFunction(boost::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, _1, _2));
+  neighbors_joint->setDistanceFunction(std::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, std::placeholders::_1, std::placeholders::_2));
+  neighbors_vpsim->setDistanceFunction(std::bind(&ViewposeGraphManager::getVertexDistanceVpSimilarity, this, std::placeholders::_1, std::placeholders::_2));
 }
 
-double ViewposeGraphManager::getVertexDistancePose(Vertex a, Vertex b)
+double ViewposeGraphManager::getVertexDistancePose(ViewposePtr a, ViewposePtr b)
 {
-  const geometry_msgs::Point &pa = graph[a]->pose.position;
-  const geometry_msgs::Point &pb = graph[b]->pose.position;
+  const geometry_msgs::Point &pa = a->pose.position;
+  const geometry_msgs::Point &pb = b->pose.position;
   double x = pb.x - pa.x;
   double y = pb.y - pa.y;
   double z = pb.z - pa.z;
   return x*x + y*y + z*z;
 }
 
-double ViewposeGraphManager::getVertexDistanceJoints(Vertex a, Vertex b)
+double ViewposeGraphManager::getVertexDistanceJoints(ViewposePtr a, ViewposePtr b)
 {
-  return graph[a]->state->distance(*(graph[b]->state), robot_manager->getJointModelGroup());
+  return a->state->distance(*(b->state), robot_manager->getJointModelGroup());
+}
+
+double ViewposeGraphManager::getVertexDistanceVpSimilarity(ViewposePtr a, ViewposePtr b)
+{
+  return octree_manager->computeViewpointDissimilarity(a, b);
+}
+
+double ViewposeGraphManager::getNearestVertexDistanceByVpSimilarity(const ViewposePtr &vp)
+{
+  ViewposePtr nb = neighbors_vpsim->nearest(vp);
+  return neighbors_vpsim->getDistanceFunction()(vp, nb);
 }
 
 size_t ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step)
 {
   size_t successful_connections = 0;
-  std::vector<Vertex> neighbors;
-  neighbor_data->nearestK(v, num_neighbors, neighbors);
+  std::vector<ViewposePtr> neighbors;
+  neighbors_joint->nearestK(graph[v], num_neighbors, neighbors);
 
-  for (const Vertex &nv : neighbors)
+  for (const ViewposePtr &nb : neighbors)
   {
+    Vertex nv = vertex_map.at(nb);
     std::pair<Edge, bool> check_edge = boost::edge(v, nv, graph);
     if (check_edge.second) // edge already exists
       continue;
 
     moveit::core::RobotStatePtr from = graph[v]->state;
-    moveit::core::RobotStatePtr to = graph[nv]->state;
+    moveit::core::RobotStatePtr to = nb->state;
 
     TrajectoryPtr t(new Trajectory());
     t->cost = from->distance(*to, robot_manager->getJointModelGroup());

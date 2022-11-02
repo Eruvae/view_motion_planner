@@ -54,7 +54,8 @@ private:
   std::shared_ptr<RobotManager> robot_manager;
   std::shared_ptr<OctreeManager> octree_manager;
 
-  std::unique_ptr<ompl::NearestNeighbors<Vertex>> neighbor_data;
+  std::unique_ptr<ompl::NearestNeighbors<ViewposePtr>> neighbors_joint;
+  std::unique_ptr<ompl::NearestNeighbors<ViewposePtr>> neighbors_vpsim;
 
   Vertex current_start_vertex;
   ViewposePtr highest_ig_pose = nullptr;
@@ -68,14 +69,17 @@ private:
 
   ValueHeap priorityQueue;
 
-  double getVertexDistancePose(Vertex a, Vertex b);
-  double getVertexDistanceJoints(Vertex a, Vertex b);
-
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                        const std::shared_ptr<OctreeManager> &octree_manager,
                        const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
                        const VmpConfig &config);
+
+  double getVertexDistancePose(ViewposePtr a, ViewposePtr b);
+  double getVertexDistanceJoints(ViewposePtr a, ViewposePtr b);
+  double getVertexDistanceVpSimilarity(ViewposePtr a, ViewposePtr b);
+
+  double getNearestVertexDistanceByVpSimilarity(const ViewposePtr &vp);
 
   boost::shared_mutex &getGraphMutex()
   {
@@ -95,7 +99,8 @@ public:
   Vertex addViewpose(const ViewposePtr &vp)
   {
     Vertex v = boost::add_vertex(vp, graph);
-    neighbor_data->add(v);
+    neighbors_joint->add(vp);
+    neighbors_vpsim->add(vp);
     vertex_map[vp] = v;
     return v;
   }
@@ -104,7 +109,8 @@ public:
   {
     const ViewposePtr vp = graph[v];
     vertex_map.erase(vp);
-    neighbor_data->remove(v);
+    neighbors_joint->remove(vp);
+    neighbors_vpsim->remove(vp);
     boost::remove_vertex(v, graph);
   }
 
@@ -112,7 +118,8 @@ public:
   {
     boost::unique_lock lock(graph_mtx);
     graph.clear();
-    neighbor_data->clear();
+    neighbors_joint->clear();
+    neighbors_vpsim->clear();
     highest_ig_pose = nullptr;
     highest_util_pose = nullptr;
     vertex_map.clear();

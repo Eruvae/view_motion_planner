@@ -336,6 +336,10 @@ void ViewMotionPlanner::graphBuilderThread()
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
+      if (graph_manager->getNearestVertexDistanceByVpSimilarity(vp) < config.vpd_threshold) // VP is too similar to existing edge
+      {
+        continue;
+      }
       Vertex v = graph_manager->addViewpose(vp);
       size_t connections = graph_manager->connectNeighbors(v, static_cast<size_t>(config.max_nb_connect_count), config.max_nb_connect_dist);
       if (config.discard_unconnected_vertices && connections == 0)
