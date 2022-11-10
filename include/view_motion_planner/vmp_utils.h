@@ -3,9 +3,13 @@
 #include <octomap/octomap_types.h>
 #include <tf2/utils.h>
 #include <random>
+#include <roi_viewpoint_planner_msgs/VmpConfig.h>
 
 namespace view_motion_planner
 {
+
+// Global configuration; reconfiguration managed by ViewMotionPlanner
+inline VmpConfig config;
 
 /*
  * Adapted from: https://stackoverflow.com/a/26127012

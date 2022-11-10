@@ -19,9 +19,8 @@ bool VertexUtilityComp::operator() (const Vertex &v1, const Vertex &v2) const
 
 ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                                            const std::shared_ptr<OctreeManager> &octree_manager,
-                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
-                                           const VmpConfig &config)
-  : config(config), robot_manager(robot_manager), octree_manager(octree_manager),
+                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph)
+  : robot_manager(robot_manager), octree_manager(octree_manager),
     neighbors_joint(new ompl::NearestNeighborsGNAT<ViewposePtr>()), neighbors_vpsim(new ompl::NearestNeighborsGNAT<ViewposePtr>()),
     vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this))
 {
@@ -258,7 +257,7 @@ bool ViewposeGraphManager::expand()
     if (!target->visited) // don't compute new cells for already visited targets
       octree_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
 
-    target->computeUtility(config);
+    target->computeUtility();
     if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)
     {
       highest_ig_pose = target;

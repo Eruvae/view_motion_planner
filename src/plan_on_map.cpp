@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 
   planner.getOctreeManager()->loadOctomap(argv[1]);
 
-  planner.getConfig().mode = Vmp_PLAN;
+  config.mode = Vmp_PLAN;
   planner.updateConfig();
 
   size_t i = 0, j = 0;

@@ -26,8 +26,6 @@ class OctreeManager
 private:
   ros::NodeHandle &nh;
 
-  VmpConfig &config;
-
   std::shared_ptr<RobotManager> robot_manager;
 
   std::default_random_engine &random_engine;
@@ -84,7 +82,7 @@ private:
 public:
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                 const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs = 1000,
+                std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs = 1000,
                 bool update_planning_tree=true, bool initialize_evaluator=false);
 
   double getEvalPassedTime()
@@ -265,7 +263,7 @@ public:
       {
           ViewposePtr past_vp = vp_vec[i];
           curr_vp->vp_dissimilarity_index = fmin(computeViewpointDissimilarity(past_vp, curr_vp), curr_vp->vp_dissimilarity_index);
-          if(curr_vp->vp_dissimilarity_index < this->config.vpd_threshold)
+          if(curr_vp->vp_dissimilarity_index < config.vpd_threshold)
           {
               ROS_DEBUG_STREAM("\t VP similar to past viewpoints: "<<curr_vp->vp_dissimilarity_index<<" nearness index: "<<curr_vp->vp_dissimilarity_distance<<" cosine distance: "<<curr_vp->vp_dissimilarity_angle);
               return true;
@@ -285,7 +283,7 @@ public:
       {
           return 1.0;
       } 
-      vp2->vp_dissimilarity_distance = fmin((vp1->origin - vp2->origin).norm()/this->config.vpd_dist_scaling, 2.0);
+      vp2->vp_dissimilarity_distance = fmin((vp1->origin - vp2->origin).norm()/config.vpd_dist_scaling, 2.0);
       if (vp2->vp_dissimilarity_distance > 1.0)
       {
           return 1.0; //(vp2.vp_dissimilarity_distance; 

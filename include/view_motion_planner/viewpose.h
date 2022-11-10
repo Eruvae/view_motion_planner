@@ -5,8 +5,9 @@
 #include <moveit/macros/class_forward.h>
 #include <geometry_msgs/Pose.h>
 #include <octomap/OcTreeKey.h>
-#include "roi_viewpoint_planner_msgs/VmpConfig.h"
 #include <octomap/octomap_types.h>
+
+#include "vmp_utils.h"
 
 namespace view_motion_planner
 {
@@ -78,7 +79,7 @@ struct Viewpose
     total_verts_on_path = 0;
   }
 
-  void computeUtility(const VmpConfig &config)
+  void computeUtility()
   {
     if (config.ig_type == Vmp_UNK_CELLS_WEIGHTED_TARGET)
       accumulated_infogain = static_cast<double>(unkCells.size()) * static_cast<double>(target_verts_on_path + 1) / static_cast<double>(total_verts_on_path + 1);

@@ -47,8 +47,6 @@ private:
 
   boost::shared_mutex graph_mtx;
 
-  const VmpConfig &config;
-
   std::unordered_map<ViewposePtr, Vertex> vertex_map;
 
   std::shared_ptr<RobotManager> robot_manager;
@@ -72,8 +70,7 @@ private:
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                        const std::shared_ptr<OctreeManager> &octree_manager,
-                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
-                       const VmpConfig &config);
+                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph);
 
   double getVertexDistancePose(ViewposePtr a, ViewposePtr b);
   double getVertexDistanceJoints(ViewposePtr a, ViewposePtr b);

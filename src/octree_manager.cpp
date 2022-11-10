@@ -17,8 +17,8 @@ namespace view_motion_planner
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                              const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
-                             std::shared_ptr<RobotManager> robot_manager, VmpConfig &config, size_t num_sphere_vecs, bool update_planning_tree, bool initialize_evaluator) :
-  nh(nh), config(config), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
+                             std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs, bool update_planning_tree, bool initialize_evaluator) :
+  nh(nh), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
   planningTree(new octomap_vpp::RoiOcTree(tree_resolution)),
   observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new rvp_evaluation::GtOctreeLoader(tree_resolution)),
   evaluator(nullptr), tree_mtx(own_mtx), map_frame(map_frame), ws_frame(ws_frame),  old_rois(0),

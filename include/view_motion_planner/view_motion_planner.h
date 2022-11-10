@@ -6,10 +6,10 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_interface/planning_interface.h>
 
+#include <roi_viewpoint_planner_msgs/VmpConfig.h>
 #include "view_motion_planner/octree_manager.h"
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose_graph.h"
-#include "roi_viewpoint_planner_msgs/VmpConfig.h"
 
 #include "view_motion_planner/trolley_remote.h"
 
@@ -198,11 +198,6 @@ public:
     config_server.updateConfig(config);
   }
 
-  VmpConfig& getConfig()
-  {
-    return config;
-  }
-
 private:
   const std::string map_frame;
   const std::string ws_frame;
@@ -218,10 +213,9 @@ private:
   EvalEpisodeEndParam ep;
   double eval_episode_duration;
 
-  VmpConfig config;
   boost::recursive_mutex config_mutex;
   dynamic_reconfigure::Server<VmpConfig> config_server;
-  void reconfigureCallback(VmpConfig &config, uint32_t level);
+  void reconfigureCallback(VmpConfig &new_config, uint32_t level);
 
   // For visualizing things in rviz
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
