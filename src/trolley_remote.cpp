@@ -27,7 +27,7 @@ TrolleyRemote::TrolleyRemote(const ros::NodeHandle &nodeHandle, const ros::NodeH
   row_length = nhp.param<float>("row_length", 100);
   row_separation = nhp.param<float>("row_separation", 30);
   // broadcast initial transforms between standard frames
-  geometry_msgs::TransformStamped t;
+  /*geometry_msgs::TransformStamped t;
   t.header.stamp = ros::Time::now();
   t.transform.rotation.w = 1.0;
   t.header.frame_id = "world";
@@ -35,7 +35,7 @@ TrolleyRemote::TrolleyRemote(const ros::NodeHandle &nodeHandle, const ros::NodeH
   staticTfBroadcaster.sendTransform(t);
   t.header.frame_id = "map";
   t.child_frame_id = "odom";
-  staticTfBroadcaster.sendTransform(t);
+  staticTfBroadcaster.sendTransform(t);*/
 }
 
 double TrolleyRemote::getPosition()
