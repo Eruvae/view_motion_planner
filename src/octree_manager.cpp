@@ -364,7 +364,8 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
   vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
   vp->origin = origin; 
   vp->dir_vec = (end - origin).normalize();
-  /*if(isViewpointSimilarToPastViewpoints(past_viewposes_, vp))  // Salih: Commented out the related function!
+
+  /*if(vp->isSimilarToPastViewpoints(past_viewposes_))  // old: isViewpointSimilarToPastViewpoints(past_viewposes_, vp)
   {
     return nullptr;
   }*/

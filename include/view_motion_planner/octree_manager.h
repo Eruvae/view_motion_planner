@@ -255,23 +255,6 @@ public:
   bool saveEvaluatorData(double plan_length, double traj_duration);
   bool resetEvaluator();
 
-  inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 500)
-  {
-      num_vp = std::min(vp_vec.size(), num_vp);
-      curr_vp->vp_dissimilarity_index = 1.0;
-      for(size_t i = 0; i < num_vp; ++i)
-      {
-          ViewposePtr past_vp = vp_vec[i];
-          curr_vp->vp_dissimilarity_index = fmin(computeViewpointDissimilarity(past_vp, curr_vp), curr_vp->vp_dissimilarity_index);
-          if(curr_vp->vp_dissimilarity_index < config.vpd_threshold)
-          {
-              ROS_DEBUG_STREAM("\t VP similar to past viewpoints: "<<curr_vp->vp_dissimilarity_index<<" nearness index: "<<curr_vp->vp_dissimilarity_distance<<" cosine distance: "<<curr_vp->vp_dissimilarity_angle);
-              return true;
-          }
-      }
-      return false;
-  }
-
   inline void updatePastViewposesList(const ViewposePtr vp1)
   {
     if(past_viewposes_.size() < 1000)

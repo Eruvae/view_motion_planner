@@ -109,7 +109,25 @@ struct Viewpose
       return this->vp_dissimilarity_index;
   }
 
+  bool isSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, size_t num_vp = 500)
+  {
+      num_vp = std::min(vp_vec.size(), num_vp);
+      this->vp_dissimilarity_index = 1.0;
+      for(size_t i = 0; i < num_vp; ++i)
+      {
+          ViewposePtr past_vp = vp_vec[i];
+          this->vp_dissimilarity_index = fmin(this->computeViewpointDissimilarity(past_vp), this->vp_dissimilarity_index);
+          if(this->vp_dissimilarity_index < config.vpd_threshold)
+          {
+              ROS_DEBUG_STREAM("\t VP similar to past viewpoints: " << this->vp_dissimilarity_index << " nearness index: " << this->vp_dissimilarity_distance << " cosine distance: " << this->vp_dissimilarity_angle);
+              return true;
+          }
+      }
+      return false;
+  }
+
 };
+
 
 static inline robot_trajectory::RobotTrajectoryPtr getTrajectoryForState(TrajectoryPtr t, ViewposePtr v)
 {
