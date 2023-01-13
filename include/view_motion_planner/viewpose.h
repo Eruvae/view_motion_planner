@@ -88,6 +88,27 @@ struct Viewpose
 
     accumulated_utility = accumulated_cost > 0 ? accumulated_infogain / accumulated_cost : 0;
   }
+
+  double computeViewpointDissimilarity(const ViewposePtr vp_other)
+  {
+      this->vp_dissimilarity_distance = 1.0;
+      this->vp_dissimilarity_angle = 1.0;
+
+      double cosine_similarity = vp_other->dir_vec.dot(this->dir_vec);
+      this->vp_dissimilarity_angle = fmin(1- cosine_similarity, 2.0);
+      if(this->vp_dissimilarity_angle > 1.0)
+      {
+          return 1.0;
+      } 
+      this->vp_dissimilarity_distance = fmin((vp_other->origin - this->origin).norm()/config.vpd_dist_scaling, 2.0);
+      if (this->vp_dissimilarity_distance > 1.0)
+      {
+          return 1.0; //(this.vp_dissimilarity_distance; 
+      }
+      this->vp_dissimilarity_index = fmin(this->vp_dissimilarity_distance*this->vp_dissimilarity_angle, 1.0);
+      return this->vp_dissimilarity_index;
+  }
+
 };
 
 static inline robot_trajectory::RobotTrajectoryPtr getTrajectoryForState(TrajectoryPtr t, ViewposePtr v)

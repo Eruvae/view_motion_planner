@@ -272,26 +272,6 @@ public:
       return false;
   }
 
-  inline double computeViewpointDissimilarity(const ViewposePtr vp1, ViewposePtr vp2)
-  {
-      vp2->vp_dissimilarity_distance = 1.0;
-      vp2->vp_dissimilarity_angle = 1.0;
-
-      double cosine_similarity = vp1->dir_vec.dot(vp2->dir_vec);
-      vp2->vp_dissimilarity_angle = fmin(1- cosine_similarity, 2.0);
-      if(vp2->vp_dissimilarity_angle > 1.0)
-      {
-          return 1.0;
-      } 
-      vp2->vp_dissimilarity_distance = fmin((vp1->origin - vp2->origin).norm()/config.vpd_dist_scaling, 2.0);
-      if (vp2->vp_dissimilarity_distance > 1.0)
-      {
-          return 1.0; //(vp2.vp_dissimilarity_distance; 
-      }
-      vp2->vp_dissimilarity_index = fmin(vp2->vp_dissimilarity_distance*vp2->vp_dissimilarity_angle, 1.0);
-      return vp2->vp_dissimilarity_index;
-  }
-
   inline void updatePastViewposesList(const ViewposePtr vp1)
   {
     if(past_viewposes_.size() < 1000)

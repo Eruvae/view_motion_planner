@@ -45,7 +45,7 @@ double ViewposeGraphManager::getVertexDistanceJoints(ViewposePtr a, ViewposePtr 
 
 double ViewposeGraphManager::getVertexDistanceVpSimilarity(ViewposePtr a, ViewposePtr b)
 {
-  return octree_manager->computeViewpointDissimilarity(a, b);
+  return b->computeViewpointDissimilarity(a); // return computeViewpointDissimilarity(a, b);
 }
 
 double ViewposeGraphManager::getNearestVertexDistanceByVpSimilarity(const ViewposePtr &vp)
