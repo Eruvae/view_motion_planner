@@ -29,6 +29,7 @@ set (CATKIN_DEPENDENCIES
     #moveit_setup_assistant
     urdf
     srdfdom
+    trolley_simulation
 )
 
 ## Find catkin macros and libraries
@@ -169,7 +170,6 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/octree_manager.cpp
   src/robot_manager.cpp
   src/viewpose_graph.cpp
-  src/trolley_remote.cpp
 )
 
 ## Declare a C++ library

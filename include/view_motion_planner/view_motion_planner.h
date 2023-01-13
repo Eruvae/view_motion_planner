@@ -11,7 +11,7 @@
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose_graph.h"
 
-#include "view_motion_planner/trolley_remote.h"
+#include "trolley_simulation/trolley_remote.h"
 
 namespace view_motion_planner
 {

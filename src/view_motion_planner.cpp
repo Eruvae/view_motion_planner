@@ -20,9 +20,9 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     ep(ep),
     eval_episode_duration(eval_episode_duration),
     config_server(config_mutex),
-    vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
-    vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
-    robot_manager(new RobotManager(nh, tfBuffer, map_frame, robot_description_param_name, group_name, ee_link_name)),
+    vt_graph(new rviz_visual_tools::RvizVisualTools(ws_frame, "vm_graph")),
+    vt_searched_graph(new rviz_visual_tools::RvizVisualTools(ws_frame, "vm_searched_graph")),
+    robot_manager(new RobotManager(nh, tfBuffer, ws_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph)),
@@ -405,7 +405,7 @@ bool ViewMotionPlanner::searchPath()
 
     has_expanded = true;
   }
-  if (config.visualize_graph && has_expanded)
+  if (config.visualize_graph)
     graph_manager->visualizeGraph(config.visualize_expanded, config.visualize_unexpanded);
 
   return has_expanded;
