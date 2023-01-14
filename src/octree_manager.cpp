@@ -242,7 +242,7 @@ void OctreeManager::updateTargets()
   boost::unique_lock lock(target_vector_mtx);
   updateRoiTargets();
   updateExplTargets();
-  publishTargets();
+  targetPub.publish( targetsToROSVisualizationMsg(current_roi_targets, current_expl_targets, current_border_targets, map_frame) ); // publishTargets();
 }
 
 bool OctreeManager::getRandomRoiTarget(octomap::point3d &target)
@@ -643,50 +643,6 @@ void OctreeManager::publishObservationPoints(const std::vector<ViewposePtr> &vps
   pc->header.frame_id = map_frame;
   pcl_conversions::toPCL(ros::Time::now(), pc->header.stamp);
   observatonPointsPub.publish(pc);
-}
-
-void OctreeManager::publishTargets()
-{
-  static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
-  static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
-  static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
-
-  const size_t NUM_P = current_roi_targets.size() + current_expl_targets.size() + current_border_targets.size();
-  if (NUM_P == 0)
-  {
-    ROS_WARN("No targets");
-    return;
-  }
-
-  visualization_msgs::Marker m;
-  m.header.frame_id = map_frame;
-  m.header.stamp = ros::Time();
-  m.ns = "targets";
-  m.id = 0;
-  m.type = visualization_msgs::Marker::POINTS;
-  m.action = visualization_msgs::Marker::ADD;
-  m.pose.orientation.w = 1.0;
-  m.scale.x = 0.005;
-  m.scale.y = 0.005;
-  m.color.a = 1.0;
-  m.points.reserve(NUM_P);
-  m.colors.reserve(NUM_P);
-  for (octomap::point3d &p : current_roi_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_RED);
-  }
-  for (octomap::point3d &p : current_expl_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_GREEN);
-  }
-  for (octomap::point3d &p : current_border_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_BLUE);
-  }
-  targetPub.publish(m);
 }
 
 bool OctreeManager::startEvaluator()

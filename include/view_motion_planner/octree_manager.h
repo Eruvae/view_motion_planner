@@ -17,6 +17,7 @@
 #include "view_motion_planner/viewpose.h"
 #include <moveit_visual_tools/moveit_visual_tools.h>
 #include <std_srvs/Empty.h>
+#include "view_motion_planner/visualization_utils.h"
 
 namespace view_motion_planner
 {
@@ -248,7 +249,6 @@ public:
   void publishObservationRegions();
   void publishObservationPoints(const octomap::KeySet &keys);
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
-  void publishTargets();
 
   bool startEvaluator();
   void setEvaluatorStartParams();
