@@ -255,9 +255,9 @@ public:
 //  bool saveEvaluatorData(double plan_length, double traj_duration);
 //  bool resetEvaluator();
 
-  inline void updatePastViewposesList(const ViewposePtr vp1)
+  inline void updatePastViewposesList(const ViewposePtr vp1, uint32_t max_history = 1000)
   {
-    if(past_viewposes_.size() < 1000)
+    if(past_viewposes_.size() < max_history)
     {
       past_viewposes_.push_back(vp1);
     }
