@@ -645,86 +645,73 @@ void OctreeManager::publishObservationPoints(const std::vector<ViewposePtr> &vps
   observatonPointsPub.publish(pc);
 }
 
-bool OctreeManager::startEvaluator()
-{
-  eval_trial_num = 0;
-  setEvaluatorStartParams();
-  return true;
-}
+// bool OctreeManager::startEvaluator()
+// {
+//   eval_trial_num = 0;
+//   setEvaluatorStartParams();
+//   return true;
+// }
 
-void OctreeManager::setEvaluatorStartParams()
-{
-  std::string file_index_str = std::to_string(eval_trial_num);
-  eval_resultsFile = std::ofstream("planner_results_" + file_index_str + ".csv");
-  eval_resultsFileOld = std::ofstream("planner_results_old" + file_index_str + ".csv");
-  eval_externalClusterFile = std::ofstream("planner_results_ec" + file_index_str + ".csv");
-  eval_fruitCellPercFile = std::ofstream("results_fruit_cells_" + file_index_str + ".csv");
-  eval_volumeAccuracyFile = std::ofstream("results_volume_accuracy_" + file_index_str + ".csv");
-  eval_distanceFile = std::ofstream("results_distances_" + file_index_str + ".csv");
-  eval_resultsFile << "Time (s),Plan duration (s),Plan Length,";
-  evaluator->writeHeader(eval_resultsFile) << ",Step" << std::endl;
-  eval_resultsFileOld << "Time (s),Plan duration (s),Plan Length,";
-  evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step" << std::endl;
-  eval_externalClusterFile << "Time (s),Plan duration (s),Plan Length,";
-  external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step" << std::endl;
-  eval_plannerStartTime = ros::Time::now();
-  eval_passedTime = 0;
-  eval_accumulatedPlanDuration = 0;
-  eval_accumulatedPlanLength = 0;
-}
+// void OctreeManager::setEvaluatorStartParams()
+// {
+//   std::string file_index_str = std::to_string(eval_trial_num);
+//   eval_resultsFile = std::ofstream("planner_results_" + file_index_str + ".csv");
+//   eval_resultsFileOld = std::ofstream("planner_results_old" + file_index_str + ".csv");
+//   eval_externalClusterFile = std::ofstream("planner_results_ec" + file_index_str + ".csv");
+//   eval_fruitCellPercFile = std::ofstream("results_fruit_cells_" + file_index_str + ".csv");
+//   eval_volumeAccuracyFile = std::ofstream("results_volume_accuracy_" + file_index_str + ".csv");
+//   eval_distanceFile = std::ofstream("results_distances_" + file_index_str + ".csv");
+//   eval_resultsFile << "Time (s),Plan duration (s),Plan Length,";
+//   evaluator->writeHeader(eval_resultsFile) << ",Step" << std::endl;
+//   eval_resultsFileOld << "Time (s),Plan duration (s),Plan Length,";
+//   evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step" << std::endl;
+//   eval_externalClusterFile << "Time (s),Plan duration (s),Plan Length,";
+//   external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step" << std::endl;
+//   eval_plannerStartTime = ros::Time::now();
+//   eval_passedTime = 0;
+//   eval_accumulatedPlanDuration = 0;
+//   eval_accumulatedPlanLength = 0;
+// }
 
-template<typename T>
-std::ostream& writeVector(std::ostream &os, double passed_time, const std::vector<T> &vec)
-{
-  os << passed_time << ",";
-  for (size_t i = 0; i < vec.size(); i++)
-  {
-    os << vec[i];
-    if (i < vec.size() - 1)
-      os << ",";
-  }
-  return os;
-}
+// bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
+// {
+//   ros::Time currentTime = ros::Time::now();
 
-bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
-{
-  ros::Time currentTime = ros::Time::now();
+//   eval_passedTime = (currentTime - eval_plannerStartTime).toSec();
 
-  eval_passedTime = (currentTime - eval_plannerStartTime).toSec();
+//   eval_accumulatedPlanDuration += traj_duration;
+//   eval_accumulatedPlanLength += plan_length;
 
-  eval_accumulatedPlanDuration += traj_duration;
-  eval_accumulatedPlanLength += plan_length;
+//   rvp_evaluation::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(eval_passedTime));
+//   rvp_evaluation::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
 
-  rvp_evaluation::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(eval_passedTime));
-  rvp_evaluation::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
+//   eval_resultsFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+//   evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << std::endl;
 
-  eval_resultsFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << std::endl;
+//   eval_resultsFileOld << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+//   evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << std::endl;
 
-  eval_resultsFileOld << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << std::endl;
+//   eval_externalClusterFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+//   external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << std::endl;
 
-  eval_externalClusterFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << std::endl;
+//   writeVector(eval_fruitCellPercFile, eval_passedTime, res.fruit_cell_percentages) << std::endl;
+//   writeVector(eval_volumeAccuracyFile, eval_passedTime, res.volume_accuracies) << std::endl;
+//   writeVector(eval_distanceFile, eval_passedTime, res.distances) << std::endl;
 
-  writeVector(eval_fruitCellPercFile, eval_passedTime, res.fruit_cell_percentages) << std::endl;
-  writeVector(eval_volumeAccuracyFile, eval_passedTime, res.volume_accuracies) << std::endl;
-  writeVector(eval_distanceFile, eval_passedTime, res.distances) << std::endl;
+//   return true;
+// }
 
-  return true;
-}
-
-bool OctreeManager::resetEvaluator()
-{
-  eval_resultsFile.close();
-  eval_resultsFileOld.close();
-  eval_externalClusterFile.close();
-  eval_fruitCellPercFile.close();
-  eval_volumeAccuracyFile.close();
-  eval_distanceFile.close();
-  eval_trial_num++;
-  setEvaluatorStartParams();
-  return true;
-}
+// bool OctreeManager::resetEvaluator()
+// {
+//   eval_resultsFile.close();
+//   eval_resultsFileOld.close();
+//   eval_externalClusterFile.close();
+//   eval_fruitCellPercFile.close();
+//   eval_volumeAccuracyFile.close();
+//   eval_distanceFile.close();
+//   eval_trial_num++;
+//   setEvaluatorStartParams();
+//   return true;
+// }
 
 } // namespace view_motion_planner

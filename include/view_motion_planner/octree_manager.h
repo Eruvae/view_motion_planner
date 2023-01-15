@@ -250,10 +250,10 @@ public:
   void publishObservationPoints(const octomap::KeySet &keys);
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
 
-  bool startEvaluator();
-  void setEvaluatorStartParams();
-  bool saveEvaluatorData(double plan_length, double traj_duration);
-  bool resetEvaluator();
+//  bool startEvaluator();
+//  void setEvaluatorStartParams();
+//  bool saveEvaluatorData(double plan_length, double traj_duration);
+//  bool resetEvaluator();
 
   inline void updatePastViewposesList(const ViewposePtr vp1)
   {

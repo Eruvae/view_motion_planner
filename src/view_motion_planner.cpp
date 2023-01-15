@@ -464,7 +464,8 @@ bool ViewMotionPlanner::executePath()
       octree_manager->waitForPointcloudWithRoi();
       if (evaluation_mode)
       {
-        octree_manager->saveEvaluatorData(cost, traj->getDuration());
+        ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
+        //octree_manager->saveEvaluatorData(cost, traj->getDuration());
       }
       if (!success)
       {
@@ -609,7 +610,10 @@ void ViewMotionPlanner::plannerLoop()
     ROS_INFO_STREAM("EVALUATION MODE ACTIVATED");
     config.mode = Vmp_PLAN_AND_EXECUTE;
     updateConfig();
-    octree_manager->startEvaluator();
+
+    ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
+    //octree_manager->startEvaluator();
+
     for (size_t current_episode=0; ros::ok() && current_episode < eval_num_episodes; current_episode++)
     {
       pathSearcherThread(ep, eval_episode_duration);
@@ -618,7 +622,9 @@ void ViewMotionPlanner::plannerLoop()
       octree_manager->resetOctomap();
       graph_manager->clear();
       octree_manager->waitForPointcloudWithRoi();
-      octree_manager->resetEvaluator();
+
+      ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
+      //octree_manager->resetEvaluator();
     }
   }
   else
