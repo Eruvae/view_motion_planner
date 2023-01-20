@@ -89,7 +89,18 @@ moveit::core::RobotStatePtr RobotManager::getCurrentState()
 
 geometry_msgs::Pose RobotManager::getCurrentPose()
 {
-  return manipulator_group.getCurrentPose(end_effector_link).pose;
+  //ROS_INFO_STREAM("Camera pose frame: " << manipulator_group.getCurrentPose(end_effector_link).header.frame_id);
+  //ROS_INFO_STREAM("Camera pose: " << manipulator_group.getCurrentPose(end_effector_link).pose.position);
+  //return manipulator_group.getCurrentPose(end_effector_link).pose;
+  geometry_msgs::TransformStamped cur_tf;
+  getCurrentTransform(cur_tf);
+  geometry_msgs::Pose p;
+  p.position.x = cur_tf.transform.translation.x;
+  p.position.y = cur_tf.transform.translation.y;
+  p.position.z = cur_tf.transform.translation.z;
+  p.orientation = cur_tf.transform.rotation;
+  ROS_INFO_STREAM("Camera pose NEW: " << p.position);
+  return p;
 }
 
 bool RobotManager::reset()

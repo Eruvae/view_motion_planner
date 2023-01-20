@@ -31,6 +31,11 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
   targetPub = nh.advertise<visualization_msgs::Marker>("targets", 1);
   //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
+  dbg_target_sample_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("dbg_target_sample", 1);
+  dbg_target_cloud.header.frame_id = map_frame;
+  dbg_viewpoint_sample_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("dbg_viewpoint_sample", 1);
+  dbg_viewpoint_cloud.header.frame_id = ws_frame;
+
   resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
   resetVoxbloxMapClient = nh.serviceClient<std_srvs::Empty>("/voxblox_node/clear_map");
 
@@ -362,20 +367,39 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
 
   vp->pose.position = octomap::pointOctomapToMsg(end);
   vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
-  vp->origin = origin; 
+  vp->origin = origin;
   vp->dir_vec = (end - origin).normalize();
   /*if(isViewpointSimilarToPastViewpoints(past_viewposes_, vp))
   {
     return nullptr;
   }*/
 
-  vp->state = robot_manager->getPoseRobotState(transformToWorkspace(vp->pose));
+  vp->state = robot_manager->getPoseRobotState(vp->pose);
   vp->type = type;
+
+  dbg_target_cloud.push_back(octomap_vpp::octomapPointToPcl<pcl::PointXYZ>(origin));
+  dbg_viewpoint_cloud.push_back(octomap_vpp::octomapPointToPcl<pcl::PointXYZ>(transformToWorkspace(end)));
+
+  static ros::Time dbg_last_print_time = ros::Time::now();
+  static size_t dbg_valid_states = 0;
+  static size_t dbg_invalid_states = 0;
+  ros::Time dbg_cur_time = ros::Time::now();
+  if ((dbg_cur_time - dbg_last_print_time).toSec() > 1.0)
+  {
+    ROS_INFO_STREAM("States valid: " << dbg_valid_states << "; invalid: " << dbg_invalid_states);
+    dbg_target_cloud.header.stamp = pcl_conversions::toPCL(dbg_cur_time);
+    dbg_target_sample_pub.publish(dbg_target_cloud);
+    dbg_viewpoint_cloud.header.stamp = pcl_conversions::toPCL(dbg_cur_time);
+    dbg_viewpoint_sample_pub.publish(dbg_viewpoint_cloud);
+    dbg_last_print_time = dbg_cur_time;
+  }
 
   if (vp->state == nullptr)
   {
+    dbg_invalid_states++;
     return nullptr;
   }
+  dbg_valid_states++;
   return vp;
 }
 

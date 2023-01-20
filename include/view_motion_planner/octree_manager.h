@@ -44,6 +44,12 @@ private:
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
   ros::Publisher targetPub;
+
+  ros::Publisher dbg_target_sample_pub;
+  pcl::PointCloud<pcl::PointXYZ> dbg_target_cloud;
+  ros::Publisher dbg_viewpoint_sample_pub;
+  pcl::PointCloud<pcl::PointXYZ> dbg_viewpoint_cloud;
+
   ros::Subscriber roiSub;
   size_t old_rois;
   octomap::KeySet encountered_keys;

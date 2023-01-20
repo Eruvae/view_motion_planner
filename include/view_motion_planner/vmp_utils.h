@@ -38,7 +38,7 @@ static std::vector<octomath::Vector3> getFibonacciSphereVectors(size_t samples)
  * found in: https://blog.selfshadow.com/2011/10/17/perp-vectors/
 */
 static inline tf2::Vector3 getPerpVectorStark(const tf2::Vector3 &u)
- {
+{
   tf2::Vector3 a = u.absolute();
   bool uyx = std::signbit(a.x() - a.y());
   bool uzx = std::signbit(a.x() - a.z());
