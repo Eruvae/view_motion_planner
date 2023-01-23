@@ -595,6 +595,19 @@ void ViewMotionPlanner::exploreNamedPoses()
   }
 }
 
+void ViewMotionPlanner::flipWsAndSr()
+{
+  config.ws_min_y = -config.ws_min_y;
+  config.ws_max_y = -config.ws_max_y;
+  std::swap(config.ws_min_y, config.ws_max_y);
+  config.sr_min_y = -config.sr_min_y;
+  config.sr_max_y = -config.sr_max_y;
+  std::swap(config.sr_min_y, config.sr_max_y);
+
+  publishWorkspaceMarker();
+  publishSamplingRegionMarker();
+}
+
 void ViewMotionPlanner::plannerLoop()
 {    
   ROS_INFO_STREAM("PLANNER LOOP CALLED");

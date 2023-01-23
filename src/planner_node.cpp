@@ -101,6 +101,19 @@ bool saveCurrentRobotState(roi_viewpoint_planner_msgs::SaveCurrentRobotState::Re
   return true;
 }
 
+bool flipWsAndSr(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+{
+  planner->flipWsAndSr();
+  return true;
+}
+
+bool updateWsAndSrMarker(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+{
+  planner->publishWorkspaceMarker();
+  planner->publishSamplingRegionMarker();
+  return true;
+}
+
 
 int main(int argc, char **argv)
 {
@@ -146,6 +159,8 @@ int main(int argc, char **argv)
   ros::ServiceServer loadOctomapService = nh.advertiseService("/roi_viewpoint_planner/load_octomap", loadOctomap);
   ros::ServiceServer resetOctomapService = nh.advertiseService("/roi_viewpoint_planner/reset_octomap", resetOctomap);
   ros::ServiceServer saveCurrentRobotStateService = nh.advertiseService("/roi_viewpoint_planner/save_robot_state", saveCurrentRobotState);
+  ros::ServiceServer flipWsAndSrService = nh.advertiseService("/roi_viewpoint_planner/flip_ws_and_sr", flipWsAndSr);
+  ros::ServiceServer updateWsAndSrMarkerService = nh.advertiseService("/roi_viewpoint_planner/update_ws_and_sr_marker", updateWsAndSrMarker);
 
 
   ROS_INFO_STREAM("PLANNER CREATED");

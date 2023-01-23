@@ -174,6 +174,8 @@ public:
 
   void exploreNamedPoses();
 
+  void flipWsAndSr();
+
   void plannerLoop();
 
   //bool plannerLoopOnce(); // returns true if moved
