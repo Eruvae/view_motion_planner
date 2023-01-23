@@ -6,13 +6,15 @@ namespace view_motion_planner
 {
 
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
-                                     const std::string &map_frame, const std::string &ws_frame, const std::string &robot_description_param_name,
-                                     const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
-                                     bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
+                                     const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
+                                     const std::string &robot_description_param_name, const std::string &group_name, const std::string &ee_link_name,
+                                     double tree_resolution, size_t graph_builder_threads, bool update_planning_tree,
+                                     bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
   : nh_(nh),
     random_engine(std::random_device{}()),
     map_frame(map_frame),
     ws_frame(ws_frame),
+    pose_frame(pose_frame),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
     update_planning_tree(update_planning_tree),
     evaluation_mode(evaluation_mode),
@@ -22,9 +24,9 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
-    robot_manager(new RobotManager(nh, tfBuffer, ws_frame, robot_description_param_name, group_name, ee_link_name)),
+    robot_manager(new RobotManager(nh, tfBuffer, pose_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),
+    octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
@@ -353,7 +355,7 @@ void ViewMotionPlanner::graphBuilderThread()
 
 void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells)
 {
-  octomap::pose6d viewpose = octree_manager->transformToMapFrame(robot_manager->getRobotStatePose(state));
+  octomap::pose6d viewpose = octree_manager->transform(robot_manager->getRobotStatePose(state), pose_frame, map_frame);
   octree_manager->computePoseObservedCells(viewpose, freeCells, occCells, unkCells);
 }
 
@@ -363,7 +365,7 @@ std::optional<Vertex> ViewMotionPlanner::initCameraPoseGraph()
   ViewposePtr cam_vp(new Viewpose());
   cam_vp->state = robot_manager->getCurrentState();
   if (!cam_vp->state) return std::nullopt;
-  cam_vp->pose = octree_manager->transformToMapFrame(robot_manager->getCurrentPose());
+  cam_vp->pose = octree_manager->transform(robot_manager->getCurrentPose(), pose_frame, map_frame);
   Vertex cam_vert = graph_manager->addViewpose(cam_vp);
   return cam_vert;
 }

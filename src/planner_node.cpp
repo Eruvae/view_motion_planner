@@ -118,6 +118,7 @@ int main(int argc, char **argv)
 
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
+  std::string pose_frame = nh.param<std::string>("/roi_viewpoint_planner/pose_frame", "world");
   std::string robot_description_param_name = nh.param<std::string>("/roi_viewpoint_planner/robot_description_param_name", "robot_description");
   std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
   std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
@@ -136,7 +137,7 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  planner = new ViewMotionPlanner(nh, tfBuffer, map_frame, ws_frame,
+  planner = new ViewMotionPlanner(nh, tfBuffer, map_frame, ws_frame, pose_frame,
                                   robot_description_param_name, group_name, ee_link_name,
                                   tree_resolution, num_graph_builder_threads,
                                   update_planning_tree, evaluate_results, eval_num_episodes, ep, eval_episode_duration);

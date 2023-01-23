@@ -16,12 +16,13 @@ namespace view_motion_planner
 {
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
-                             const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
+                             const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
+                             double tree_resolution, std::default_random_engine &random_engine,
                              std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs, bool update_planning_tree, bool initialize_evaluator) :
   nh(nh), robot_manager(robot_manager), random_engine(random_engine), tfBuffer(tfBuffer),
   planningTree(new octomap_vpp::RoiOcTree(tree_resolution)),
   observationRegions(new octomap_vpp::WorkspaceOcTree(tree_resolution)), gtLoader(new rvp_evaluation::GtOctreeLoader(tree_resolution)),
-  evaluator(nullptr), tree_mtx(own_mtx), map_frame(map_frame), ws_frame(ws_frame),  old_rois(0),
+  evaluator(nullptr), tree_mtx(own_mtx), map_frame(map_frame), ws_frame(ws_frame), pose_frame(pose_frame), old_rois(0),
   sphere_vecs(getFibonacciSphereVectors(num_sphere_vecs)),
   update_planning_tree(update_planning_tree)
 {
@@ -31,10 +32,12 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
   targetPub = nh.advertise<visualization_msgs::Marker>("targets", 1);
   //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
+#ifdef DBG_TARGETS_VPS
   dbg_target_sample_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("dbg_target_sample", 1);
   dbg_target_cloud.header.frame_id = map_frame;
   dbg_viewpoint_sample_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("dbg_viewpoint_sample", 1);
   dbg_viewpoint_cloud.header.frame_id = ws_frame;
+#endif
 
   resetMoveitOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
   resetVoxbloxMapClient = nh.serviceClient<std_srvs::Empty>("/voxblox_node/clear_map");
@@ -134,7 +137,7 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
   std::for_each(loop_policy, roiKeys.begin(), roiKeys.end(), [&](const octomap::OcTreeKey &roiKey)
   {
     octomap::point3d origin = planningTree->keyToCoord(roiKey);
-    if (!isInSamplingRegion(transformToWorkspace(origin))) // ROI not in sampling region
+    if (!isInSamplingRegion(transform(origin, map_frame, ws_frame))) // ROI not in sampling region
       return;
 
     std::for_each(loop_policy, sphere_vecs.begin(), sphere_vecs.end(), [&](const octomap::point3d &direction)
@@ -156,7 +159,7 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
       }
       if (!intersects)
       {
-        if (!isInWorkspace(transformToWorkspace(end))) // Point not in workspace region
+        if (!isInWorkspace(transform(end, map_frame, ws_frame))) // Point not in workspace region
           return;
 
         ViewposePtr vp(new Viewpose());
@@ -164,11 +167,11 @@ std::vector<ViewposePtr> OctreeManager::sampleObservationPoses(double sensorRang
         vp->pose.position = octomap::pointOctomapToMsg(end);
         vp->pose.orientation = tf2::toMsg(getQuatInDir(-direction));
 
-        vp->state = robot_manager->getPoseRobotState(transformToWorkspace(vp->pose));
+        vp->state = robot_manager->getPoseRobotState(transform(vp->pose, map_frame, pose_frame));
         if (vp->state == nullptr)
           return;
 
-        /* std::vector<double> joint_values = robot_manager->getPoseJointValues(transformToWorkspace(pose));
+        /* std::vector<double> joint_values = robot_manager->getPoseJointValues(transform(pose, map_frame, pose_frame));
         if (joint_values.empty())
           return; */
 
@@ -192,7 +195,7 @@ void OctreeManager::updateRoiTargets()
   octomap::KeySet freeNeighbours;
   for (const octomap::OcTreeKey &key : roi)
   {
-    if (!isInSamplingRegion(transformToWorkspace(planningTree->keyToCoord(key)))) // ROI not in sampling region
+    if (!isInSamplingRegion(transform(planningTree->keyToCoord(key), map_frame, ws_frame))) // ROI not in sampling region
       continue;
 
     planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_18);
@@ -213,8 +216,8 @@ void OctreeManager::updateExplTargets()
 {
   std::vector<octomap::point3d> new_expl_targets;
   std::vector<octomap::point3d> new_border_targets;
-  octomap::point3d srMin_tf = transformToMapFrame(octomap::point3d(config.sr_min_x, config.sr_min_y, config.sr_min_z));
-  octomap::point3d srMax_tf = transformToMapFrame(octomap::point3d(config.sr_max_x, config.sr_max_y, config.sr_max_z));
+  octomap::point3d srMin_tf = transform(octomap::point3d(config.sr_min_x, config.sr_min_y, config.sr_min_z), ws_frame, map_frame);
+  octomap::point3d srMax_tf = transform(octomap::point3d(config.sr_max_x, config.sr_max_y, config.sr_max_z), ws_frame, map_frame);
   for (unsigned int i = 0; i < 3; i++)
   {
     if (srMin_tf(i) > srMax_tf(i))
@@ -222,7 +225,7 @@ void OctreeManager::updateExplTargets()
   }
   for (auto it = planningTree->begin_leafs_bbx(srMin_tf, srMax_tf), end = planningTree->end_leafs_bbx(); it != end; it++)
   {
-    //if (!isInSamplingRegion(transformToWorkspace(it.getCoordinate())))
+    //if (!isInSamplingRegion(transform(it.getCoordinate(), map_frame, ws_frame)))
     //  continue;
 
     if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
@@ -314,7 +317,7 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     for (size_t i=0; i < 100; i++)
     {
       end = sampleRandomViewpoint(origin, config.sensor_min_range, config.sensor_max_range, random_engine);
-      if (isInWorkspace(transformToWorkspace(end))) // Point in workspace region
+      if (isInWorkspace(transform(end, map_frame, ws_frame))) // Point in workspace region
       {
         found_vp = true;
         break;
@@ -331,7 +334,7 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     for (size_t i=0; i < 100; i++)
     {
       octomap::point3d end_ws = sampleRandomWorkspacePoint(); // uses min/max coordinates of workspace
-      end = transformToMapFrame(end_ws);
+      end = transform(end_ws, ws_frame, map_frame);
       if (config.vp_select_type == Vmp_WORKSPACE_RANGE)
       {
         double dist = end.distance(origin);
@@ -377,8 +380,9 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
   vp->state = robot_manager->getPoseRobotState(vp->pose);
   vp->type = type;
 
+#ifdef DBG_TARGETS_VPS
   dbg_target_cloud.push_back(octomap_vpp::octomapPointToPcl<pcl::PointXYZ>(origin));
-  dbg_viewpoint_cloud.push_back(octomap_vpp::octomapPointToPcl<pcl::PointXYZ>(transformToWorkspace(end)));
+  dbg_viewpoint_cloud.push_back(octomap_vpp::octomapPointToPcl<pcl::PointXYZ>(transform(end, map_frame, ws_frame)));
 
   static ros::Time dbg_last_print_time = ros::Time::now();
   static size_t dbg_valid_states = 0;
@@ -393,13 +397,18 @@ ViewposePtr OctreeManager::sampleRandomViewPose(TargetType type)
     dbg_viewpoint_sample_pub.publish(dbg_viewpoint_cloud);
     dbg_last_print_time = dbg_cur_time;
   }
+#endif
 
   if (vp->state == nullptr)
   {
+#ifdef DBG_TARGETS_VPS
     dbg_invalid_states++;
+#endif
     return nullptr;
   }
+#ifdef DBG_TARGETS_VPS
   dbg_valid_states++;
+#endif
   return vp;
 }
 

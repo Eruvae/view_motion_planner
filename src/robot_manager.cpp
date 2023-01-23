@@ -90,7 +90,7 @@ moveit::core::RobotStatePtr RobotManager::getCurrentState()
 geometry_msgs::Pose RobotManager::getCurrentPose()
 {
   //ROS_INFO_STREAM("Camera pose frame: " << manipulator_group.getCurrentPose(end_effector_link).header.frame_id);
-  //ROS_INFO_STREAM("Camera pose: " << manipulator_group.getCurrentPose(end_effector_link).pose.position);
+  ROS_INFO_STREAM("Camera pose: " << manipulator_group.getCurrentPose(end_effector_link).pose.position);
   //return manipulator_group.getCurrentPose(end_effector_link).pose;
   geometry_msgs::TransformStamped cur_tf;
   getCurrentTransform(cur_tf);

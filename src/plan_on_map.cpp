@@ -60,6 +60,7 @@ int main(int argc, char **argv)
   std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/static/inflated_ws_tree.ot");
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
+  std::string pose_frame = nh.param<std::string>("/roi_viewpoint_planner/pose_frame", "world");
   std::string robot_description_param_name = nh.param<std::string>("/roi_viewpoint_planner/robot_description_param_name", "robot_description");
   std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
   std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
@@ -82,7 +83,7 @@ int main(int argc, char **argv)
   ros::Publisher tjs_pub = nh.advertise<sensor_msgs::JointState>("trolley_joint_states", 1);
   ros::Publisher ajs_pub = nh.advertise<sensor_msgs::JointState>("joint_states", 1);
 
-  ViewMotionPlanner planner(nh, tfBuffer, map_frame, ws_frame,
+  ViewMotionPlanner planner(nh, tfBuffer, map_frame, ws_frame, pose_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
                             NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, ep, eval_episode_duration);

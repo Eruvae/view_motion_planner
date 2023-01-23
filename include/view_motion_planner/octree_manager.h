@@ -18,6 +18,8 @@
 #include <moveit_visual_tools/moveit_visual_tools.h>
 #include <std_srvs/Empty.h>
 
+//#define DBG_TARGETS_VPS
+
 namespace view_motion_planner
 {
 
@@ -38,17 +40,22 @@ private:
   std::unique_ptr<rvp_evaluation::ExternalClusterEvaluator> external_cluster_evaluator;
   boost::mutex own_mtx;
   boost::mutex &tree_mtx;
+
   const std::string map_frame;
   const std::string ws_frame;
+  const std::string pose_frame;
+
   ros::Publisher octomapPub;
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
   ros::Publisher targetPub;
 
+#ifdef DBG_TARGETS_VPS
   ros::Publisher dbg_target_sample_pub;
   pcl::PointCloud<pcl::PointXYZ> dbg_target_cloud;
   ros::Publisher dbg_viewpoint_sample_pub;
   pcl::PointCloud<pcl::PointXYZ> dbg_viewpoint_cloud;
+#endif
 
   ros::Subscriber roiSub;
   size_t old_rois;
@@ -87,7 +94,8 @@ private:
 
 public:
   OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
-                const std::string &map_frame, const std::string &ws_frame, double tree_resolution, std::default_random_engine &random_engine,
+                const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
+                double tree_resolution, std::default_random_engine &random_engine,
                 std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs = 1000,
                 bool update_planning_tree=true, bool initialize_evaluator=false);
 
@@ -183,41 +191,19 @@ public:
   }
 
   template<typename PointT>
-  PointT transformToMapFrame(const PointT &p)
+  PointT transform(const PointT &p, const std::string &from, const std::string &to)
   {
-    if (map_frame == ws_frame)
+    if (from == to)
       return p;
 
     geometry_msgs::TransformStamped trans;
     try
     {
-      trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+      trans = tfBuffer.lookupTransform(to, from, ros::Time(0));
     }
     catch (const tf2::TransformException &e)
     {
-      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToMapFrame: " << e.what());
-      return p;
-    }
-
-    PointT pt;
-    tf2::doTransform(p, pt, trans);
-    return pt;
-  }
-
-  template<typename PointT>
-  PointT transformToWorkspace(const PointT &p)
-  {
-    if (map_frame == ws_frame)
-      return p;
-
-    geometry_msgs::TransformStamped trans;
-    try
-    {
-      trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
-    }
-    catch (const tf2::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+      ROS_ERROR_STREAM("Couldn't find transform from " << from << " to " << to << " frame: " << e.what());
       return p;
     }
 
