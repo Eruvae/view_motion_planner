@@ -16,6 +16,7 @@ RobotManager::RobotManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const
     kinematic_model(rml->getModel()),
     jmg(kinematic_model->getJointModelGroup(group_name)),
     kinematic_state(new robot_state::RobotState(kinematic_model)),
+    home_pose("home"),
     pose_reference_frame(pose_reference_frame),
     end_effector_link(ee_link_name)
 {
@@ -262,8 +263,26 @@ bool RobotManager::moveToNamedPose(const std::string &pose_name, bool async)
 
 bool RobotManager::moveToHomePose(bool async)
 {
-  manipulator_group.setNamedTarget("home");
+  manipulator_group.setNamedTarget(home_pose);
   return planAndExecute(async);
+}
+
+void RobotManager::setHomePoseName(const std::string &name)
+{
+  home_pose = name;
+}
+
+std::string RobotManager::getHomePoseName()
+{
+  return home_pose;
+}
+
+void RobotManager::flipHomePose()
+{
+  if (home_pose == "home")
+    home_pose = "home_flipped";
+  else
+    home_pose = "home";
 }
 
 bool RobotManager::executeTrajectory(const robot_trajectory::RobotTrajectoryPtr &traj)

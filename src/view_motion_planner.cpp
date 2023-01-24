@@ -183,7 +183,7 @@ void ViewMotionPlanner::publishWorkspaceMarker()
 
   octomap::point3d min(config.ws_min_x, config.ws_min_y, config.ws_min_z);
   octomap::point3d max(config.ws_max_x, config.ws_max_y, config.ws_max_z);
-  ROS_ERROR_STREAM("WS: " << min << max);
+  //ROS_INFO_STREAM("WS: " << min << max);
   addCubeEdges(min, max, cube_msg.points);
 
   workspacePub.publish(cube_msg);
@@ -203,7 +203,7 @@ void ViewMotionPlanner::publishSamplingRegionMarker()
 
   octomap::point3d min(config.sr_min_x, config.sr_min_y, config.sr_min_z);
   octomap::point3d max(config.sr_max_x, config.sr_max_y, config.sr_max_z);
-  ROS_ERROR_STREAM("SR: " << min << max);
+  //ROS_INFO_STREAM("SR: " << min << max);
   addCubeEdges(min, max, cube_msg.points);
 
   samplingRegionPub.publish(cube_msg);
@@ -597,15 +597,67 @@ void ViewMotionPlanner::exploreNamedPoses()
 
 void ViewMotionPlanner::flipWsAndSr()
 {
-  config.ws_min_y = -config.ws_min_y;
-  config.ws_max_y = -config.ws_max_y;
+  config.ws_min_y = -(config.ws_min_y - 0.3);
+  config.ws_max_y = -(config.ws_max_y - 0.3);
   std::swap(config.ws_min_y, config.ws_max_y);
-  config.sr_min_y = -config.sr_min_y;
-  config.sr_max_y = -config.sr_max_y;
+  config.sr_min_y = -(config.sr_min_y - 0.3);
+  config.sr_max_y = -(config.sr_max_y - 0.3);
   std::swap(config.sr_min_y, config.sr_max_y);
+
+  updateConfig();
+
+  robot_manager->flipHomePose();
 
   publishWorkspaceMarker();
   publishSamplingRegionMarker();
+}
+
+bool ViewMotionPlanner::trolleyGoNextSegment()
+{
+  if (config.trolley_flip_workspace && !trolley_current_flipped)
+  {
+    flipWsAndSr();
+    robot_manager->moveToHomePose();
+    trolley_current_flipped = true;
+    return true;
+  }
+
+  if (config.trolley_num_vertical_segments > 1 && trolley_current_vertical_segment < config.trolley_num_vertical_segments - 1)
+  {
+    ROS_INFO_STREAM("Lifting trolley");
+    trolley_remote.liftTo(trolley_remote.getHeight() + config.trolley_lift_dist);
+    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    //ros::Duration(5).sleep(); // wait for transform to update
+    trolley_current_vertical_segment++;
+    if (config.trolley_flip_workspace && trolley_current_flipped)
+    {
+      flipWsAndSr();
+      trolley_current_flipped = false;
+    }
+    robot_manager->moveToHomePose();
+    return true;
+  }
+
+  if (config.trolley_num_segments > 1 && trolley_current_segment < config.trolley_num_segments - 1)
+  {
+    ROS_INFO_STREAM("Moving trolley");
+    trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
+    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    trolley_remote.liftTo(469.0);
+    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    ros::Duration(5).sleep(); // wait for transform to update
+    trolley_current_vertical_segment = 0;
+    trolley_current_segment++;
+    if (config.trolley_flip_workspace && trolley_current_flipped)
+    {
+      flipWsAndSr();
+      trolley_current_flipped = false;
+    }
+    robot_manager->moveToHomePose();
+    return true;
+  }
+
+  return false;
 }
 
 void ViewMotionPlanner::plannerLoop()
@@ -651,11 +703,11 @@ void ViewMotionPlanner::plannerLoop()
       else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
       {
         octree_manager->clearPastViewposesList();
-	if (config.trolley_plan_named_poses)
-	{
+        if (config.trolley_plan_named_poses)
+        {
           ROS_INFO_STREAM("Explore named poses for segment");
           exploreNamedPoses();
-	}
+        }
         ROS_INFO_STREAM("Planning new segment");     
         graph_manager->clear();
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
@@ -664,17 +716,12 @@ void ViewMotionPlanner::plannerLoop()
         graph_manager->clear();
         ROS_INFO_STREAM("Moving to home pose");
         robot_manager->moveToHomePose();
-        trolley_current_segment++;
-        if (trolley_current_segment >= config.trolley_num_segments) // end reached, go to idle
+        if (!trolleyGoNextSegment()) // end reached, go to idle
         {
           config.mode = Vmp_IDLE;
           updateConfig();
           continue;
         }
-        ROS_INFO_STREAM("Moving trolley");
-        trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
-        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
-        ros::Duration(5).sleep(); // wait for transform to update
         octree_manager->waitForPointcloudWithRoi();
         /*ROS_INFO_STREAM("Moving up");
         double h = trolley_remote.getHeight();

@@ -176,6 +176,8 @@ public:
 
   void flipWsAndSr();
 
+  bool trolleyGoNextSegment();
+
   void plannerLoop();
 
   //bool plannerLoopOnce(); // returns true if moved
@@ -249,6 +251,8 @@ private:
 
   trolley_remote::TrolleyRemote trolley_remote;
   int trolley_current_segment = 0;
+  int trolley_current_vertical_segment = 0;
+  bool trolley_current_flipped = false;
 
   ros::NodeHandle nh_;
 };
