@@ -8,8 +8,7 @@ namespace view_motion_planner
 ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                                      const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
                                      const std::string &robot_description_param_name, const std::string &group_name, const std::string &ee_link_name,
-                                     double tree_resolution, size_t graph_builder_threads, bool update_planning_tree,
-                                     bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
+                                     double tree_resolution, size_t graph_builder_threads, bool update_planning_tree, bool initialize_evaluator)
   : nh_(nh),
     random_engine(std::random_device{}()),
     map_frame(map_frame),
@@ -17,16 +16,15 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     pose_frame(pose_frame),
     NUM_GRAPH_BUILDER_THREADS(graph_builder_threads),
     update_planning_tree(update_planning_tree),
-    evaluation_mode(evaluation_mode),
-    eval_num_episodes(eval_num_episodes),
-    ep(ep),
-    eval_episode_duration(eval_episode_duration),
+    eval_initialized(initialize_evaluator),
+    eval_running(false),
+    eval_start(false),
     config_server(config_mutex),
     vt_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_graph")),
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, pose_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),
+    octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, initialize_evaluator)),
     graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
@@ -464,9 +462,9 @@ bool ViewMotionPlanner::executePath()
       moved = true;
       graph_manager->markAsVisited(*next_start_vertex);
       octree_manager->waitForPointcloudWithRoi();
-      if (evaluation_mode)
+      if (eval_running)
       {
-        octree_manager->saveEvaluatorData(cost, traj->getDuration());
+        octree_manager->saveEvaluatorData(cost, traj->getDuration(), eval_current_segment);
       }
       if (!success)
       {
@@ -595,6 +593,29 @@ void ViewMotionPlanner::exploreNamedPoses()
   }
 }
 
+bool ViewMotionPlanner::startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
+                    bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,
+                    bool with_trolley)
+{
+  if (!eval_initialized || eval_running || eval_start) // Evaluation not initialized, alread in progress or about to start
+    return false;
+
+  eval_num_episodes = start_index + numEvals;
+  eval_current_episode = start_index;
+  eval_episode_duration = episodeDuration;
+  eval_epend_param = episodeEndParam;
+  eval_with_trolley = with_trolley;
+  eval_current_segment = 0;
+
+  bool success = octree_manager->startEvaluator(numEvals, episodeEndParam, episodeDuration, start_index,
+    randomize_plants, min, max, min_dist, with_trolley);
+
+  if (!success) return false;
+
+  eval_start = true;
+  return true;
+}
+
 void ViewMotionPlanner::flipWsAndSr()
 {
   config.ws_min_y = -(config.ws_min_y - 0.3);
@@ -619,6 +640,7 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
     flipWsAndSr();
     robot_manager->moveToHomePose();
     trolley_current_flipped = true;
+    eval_current_segment++;
     return true;
   }
 
@@ -635,6 +657,7 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
       trolley_current_flipped = false;
     }
     robot_manager->moveToHomePose();
+    eval_current_segment++;
     return true;
   }
 
@@ -654,6 +677,7 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
       trolley_current_flipped = false;
     }
     robot_manager->moveToHomePose();
+    eval_current_segment++;
     return true;
   }
 
@@ -671,7 +695,7 @@ void ViewMotionPlanner::plannerLoop()
 
   initGraphBuilderThreads();
 
-  if (evaluation_mode)
+  /*if (evaluation_mode)
   {
     ROS_INFO_STREAM("EVALUATION MODE ACTIVATED");
     config.mode = Vmp_PLAN_AND_EXECUTE;
@@ -679,7 +703,7 @@ void ViewMotionPlanner::plannerLoop()
     octree_manager->startEvaluator();
     for (size_t current_episode=0; ros::ok() && current_episode < eval_num_episodes; current_episode++)
     {
-      pathSearcherThread(ep, eval_episode_duration);
+      pathSearcherThread(eval_epend_param, eval_episode_duration);
       pauseGraphBuilderThreads();
       robot_manager->moveToHomePose();
       octree_manager->resetOctomap();
@@ -687,69 +711,101 @@ void ViewMotionPlanner::plannerLoop()
       octree_manager->waitForPointcloudWithRoi();
       octree_manager->resetEvaluator();
     }
-  }
-  else
+  }*/
+  ROS_INFO_STREAM("ENTER MAIN LOOP");
+  for (ros::Rate rate(100); ros::ok(); rate.sleep())
   {
-    ROS_INFO_STREAM("ENTER MAIN LOOP");
-    for (ros::Rate rate(100); ros::ok(); rate.sleep())
+    if (eval_start)
     {
-      if (config.mode == Vmp_EXPLORE_NAMED_POSES)
+      ROS_INFO_STREAM("STARTING_EVALUATION");
+      assert(!eval_running);
+      if (eval_with_trolley)
+        config.mode = Vmp_PLAN_WITH_TROLLEY;
+      else
+        config.mode = Vmp_PLAN_AND_EXECUTE;
+
+      updateConfig();
+      eval_running = true;
+      eval_start = false;
+    }
+
+    if (config.mode == Vmp_EXPLORE_NAMED_POSES)
+    {
+      ROS_INFO_STREAM("Explore named poses");
+      exploreNamedPoses();
+      config.mode = Vmp_IDLE;
+      updateConfig();
+    }
+    else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+    {
+      octree_manager->clearPastViewposesList();
+      if (config.trolley_plan_named_poses)
       {
-        ROS_INFO_STREAM("Explore named poses");
+        ROS_INFO_STREAM("Explore named poses for segment");
         exploreNamedPoses();
+      }
+      ROS_INFO_STREAM("Planning new segment");
+      graph_manager->clear();
+      pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
+      const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";
+      octree_manager->saveOctomap(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true);
+      graph_manager->clear();
+      ROS_INFO_STREAM("Moving to home pose");
+      robot_manager->moveToHomePose();
+      if (!trolleyGoNextSegment()) // end reached, go to idle
+      {
         config.mode = Vmp_IDLE;
         updateConfig();
+        continue;
       }
-      else if (config.mode == Vmp_PLAN_WITH_TROLLEY)
+      octree_manager->waitForPointcloudWithRoi();
+      /*ROS_INFO_STREAM("Moving up");
+      double h = trolley_remote.getHeight();
+      ROS_INFO_STREAM("Height: " << h);
+      const double LIFT = 500;
+      static double sign = 1;
+      trolley_remote.liftTo(sign * LIFT);
+      ROS_INFO_STREAM("Lifting trolley");
+      for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+      ROS_INFO_STREAM("Trolley Ready");
+      config.mode = Vmp_IDLE;
+      sign *= -1;
+      updateConfig();*/
+    }
+    else if (config.mode >= Vmp_BUILD_GRAPH)
+    {
+      ROS_INFO_STREAM("PLANNER BUILD GRAPH AND PLAN");
+      if (eval_running)
       {
-        octree_manager->clearPastViewposesList();
-        if (config.trolley_plan_named_poses)
-        {
-          ROS_INFO_STREAM("Explore named poses for segment");
-          exploreNamedPoses();
-        }
-        ROS_INFO_STREAM("Planning new segment");     
-        graph_manager->clear();
-        pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
-        const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";
-        octree_manager->saveOctomap(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true);
-        graph_manager->clear();
-        ROS_INFO_STREAM("Moving to home pose");
+        pathSearcherThread(eval_epend_param, eval_episode_duration);
+        pauseGraphBuilderThreads();
         robot_manager->moveToHomePose();
-        if (!trolleyGoNextSegment()) // end reached, go to idle
+        octree_manager->resetOctomap();
+        graph_manager->clear();
+        octree_manager->waitForPointcloudWithRoi();
+        octree_manager->resetEvaluator();
+        eval_current_episode++;
+        if (eval_current_episode >= eval_num_episodes)
         {
+          eval_running = false;
           config.mode = Vmp_IDLE;
           updateConfig();
-          continue;
         }
-        octree_manager->waitForPointcloudWithRoi();
-        /*ROS_INFO_STREAM("Moving up");
-        double h = trolley_remote.getHeight();
-        ROS_INFO_STREAM("Height: " << h);
-        const double LIFT = 500;
-        static double sign = 1;
-        trolley_remote.liftTo(sign * LIFT);
-        ROS_INFO_STREAM("Lifting trolley");
-        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
-        ROS_INFO_STREAM("Trolley Ready");
-        config.mode = Vmp_IDLE;
-        sign *= -1;
-        updateConfig();*/
-      }
-      else if (config.mode >= Vmp_BUILD_GRAPH)
-      {
-        ROS_INFO_STREAM("PLANNER BUILD GRAPH AND PLAN");
-        pathSearcherThread();
-      }
-      else if (config.mode == Vmp_MAP_ONLY)
-      {
-        ROS_INFO_STREAM("PLANNER MAPPING");
-        octree_manager->waitForPointcloudWithRoi();
       }
       else
       {
-        //ROS_INFO_STREAM("PLANNER IDLING");
+
+        pathSearcherThread();
       }
+    }
+    else if (config.mode == Vmp_MAP_ONLY)
+    {
+      ROS_INFO_STREAM("PLANNER MAPPING");
+      octree_manager->waitForPointcloudWithRoi();
+    }
+    else
+    {
+      //ROS_INFO_STREAM("PLANNER IDLING");
     }
   }
 

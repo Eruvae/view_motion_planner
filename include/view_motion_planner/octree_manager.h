@@ -242,9 +242,12 @@ public:
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
   void publishTargets();
 
-  bool startEvaluator();
+  bool startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
+                      bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,
+                      bool with_trolley);
+
   void setEvaluatorStartParams();
-  bool saveEvaluatorData(double plan_length, double traj_duration);
+  bool saveEvaluatorData(double plan_length, double traj_duration, size_t segment);
   bool resetEvaluator();
 
   inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 500)

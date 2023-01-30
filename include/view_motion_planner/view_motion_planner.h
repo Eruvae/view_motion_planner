@@ -134,9 +134,7 @@ public:
   ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                     const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
                     const std::string &robot_description_param_name, const std::string &group_name, const std::string &ee_link_name,
-                    double tree_resolution, size_t graph_builder_threads, bool update_planning_tree=true,
-                    bool evaluation_mode=false, size_t eval_num_episodes=20,
-                    EvalEpisodeEndParam ep=EvalEpisodeEndParam::TIME, double eval_episode_duration=120.0);
+                    double tree_resolution, size_t graph_builder_threads, bool update_planning_tree=true, bool initialize_evaluator=false);
 
   ~ViewMotionPlanner();
 
@@ -173,6 +171,10 @@ public:
   void resumeGraphBuilderThreads();
 
   void exploreNamedPoses();
+
+  bool startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
+                      bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,
+                      bool with_trolley);
 
   void flipWsAndSr();
 
@@ -214,10 +216,15 @@ private:
 
   bool update_planning_tree;
 
-  bool evaluation_mode;
+  bool eval_initialized;
+  std::atomic_bool eval_start;
+  std::atomic_bool eval_running;
+  size_t eval_current_episode;
+  bool eval_with_trolley;
   size_t eval_num_episodes;
-  EvalEpisodeEndParam ep;
+  EvalEpisodeEndParam eval_epend_param;
   double eval_episode_duration;
+  size_t eval_current_segment;
 
   boost::recursive_mutex config_mutex;
   dynamic_reconfigure::Server<VmpConfig> config_server;
