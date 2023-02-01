@@ -68,7 +68,7 @@ octomap::point3d sampleRandomViewpoint(const octomap::point3d &target, double mi
   std::uniform_real_distribution<double> z_dist(-1, 1);
   std::uniform_real_distribution<double> theta_dist(-M_PI, M_PI);
   double z = z_dist(engine);
-  double theta = z_dist(engine);
+  double theta = theta_dist(engine);
   double x = std::sin(theta)*std::sqrt(1 - z*z);
   double y = std::cos(theta)*std::sqrt(1 - z*z);
   octomap::point3d p(x, y, z);
