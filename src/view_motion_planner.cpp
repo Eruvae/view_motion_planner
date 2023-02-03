@@ -635,6 +635,8 @@ void ViewMotionPlanner::flipWsAndSr()
 
 bool ViewMotionPlanner::trolleyGoNextSegment()
 {
+  robot_manager->moveToHomePose(); // move arm to home pose before moving to next segment
+
   if (config.trolley_flip_workspace && !trolley_current_flipped)
   {
     flipWsAndSr();
@@ -720,9 +722,15 @@ void ViewMotionPlanner::plannerLoop()
       ROS_INFO_STREAM("STARTING_EVALUATION");
       assert(!eval_running);
       if (eval_with_trolley)
+      {
+        config.trolley_segment_end_param = static_cast<int>(eval_epend_param);
+        config.trolley_time_per_segment = static_cast<int>(eval_episode_duration);
         config.mode = Vmp_PLAN_WITH_TROLLEY;
+      }
       else
+      {
         config.mode = Vmp_PLAN_AND_EXECUTE;
+      }
 
       updateConfig();
       eval_running = true;
@@ -746,7 +754,21 @@ void ViewMotionPlanner::plannerLoop()
       }
       ROS_INFO_STREAM("Planning new segment");
       graph_manager->clear();
-      pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
+      switch(config.trolley_segment_end_param)
+      {
+      case Vmp_TIME:
+        pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
+        break;
+      case Vmp_PLAN_DURATION:
+        pathSearcherThread(EvalEpisodeEndParam::PLAN_DURATION, octree_manager->getEvalAccPlanDuration() + config.trolley_time_per_segment);
+        break;
+      case Vmp_PLAN_LENGTH:
+        pathSearcherThread(EvalEpisodeEndParam::PLAN_LENGTH, octree_manager->getEvalAccPlanLength() + config.trolley_time_per_segment);
+        break;
+      default:
+        ROS_ERROR_STREAM("Invalid trolley segment end param: " << config.trolley_segment_end_param);
+      }
+
       const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";
       octree_manager->saveOctomap(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true);
       graph_manager->clear();
