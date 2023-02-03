@@ -5,6 +5,8 @@
 #include "view_motion_planner/view_motion_planner.h"
 #include <roi_viewpoint_planner_msgs/SaveCurrentRobotState.h>
 #include <sensor_msgs/JointState.h>
+#include <dynamic_reconfigure/server.h>
+#include <std_srvs/Empty.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -25,9 +27,14 @@ ViewMotionPlanner *planner;
 bool saveOctomap(roi_viewpoint_planner_msgs::SaveOctomap::Request &req, roi_viewpoint_planner_msgs::SaveOctomap::Response &res)
 {
   if (req.specify_filename)
-    res.filename = planner->getOctreeManager()->saveOctomap(req.name, req.name_is_prefix);
+  {
+    res.filename = planner->getMappingManager()->saveToFile(req.name, req.name_is_prefix);
+  }
   else
-    res.filename = planner->getOctreeManager()->saveOctomap();
+  {
+    ROS_ERROR("Specify a filename to save the map.");
+    return false;
+  }
 
   res.success = res.filename != "";
   return true;
@@ -35,16 +42,16 @@ bool saveOctomap(roi_viewpoint_planner_msgs::SaveOctomap::Request &req, roi_view
 
 bool loadOctomap(roi_viewpoint_planner_msgs::LoadOctomap::Request &req, roi_viewpoint_planner_msgs::LoadOctomap::Response &res)
 {
-  int err_code = planner->getOctreeManager()->loadOctomap(req.filename, req.offset);
+  int err_code = planner->getMappingManager()->loadFromFile(req.filename, req.offset);
   res.success = (err_code == 0);
   if (err_code == -1) res.error_message = "Deserialization failed";
-  else if (err_code == -2) res.error_message = "Wrong Octree type";
+  else if (err_code == -2) res.error_message = "Wrong Map type";
   return true;
 }
 
 bool resetOctomap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
-  planner->getOctreeManager()->resetOctomap();
+  planner->getMappingManager()->resetMap();
   return true;
 }
 

@@ -4,12 +4,91 @@
 #include <tf2/utils.h>
 #include <random>
 #include <roi_viewpoint_planner_msgs/VmpConfig.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <rvp_evaluation/compute_cubes.h> // !!!!!!!!!
+#include <view_motion_planner/mapping_manager/base_mapping_manager.h>
 
 namespace view_motion_planner
 {
 
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// TYPE DEFINITIONS ////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
+enum class EvalEpisodeEndParam
+{
+  TIME = 0,
+  PLAN_DURATION = 1,
+  PLAN_LENGTH = 2,
+  NUM_EPEND_PARAMS = 3
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// GLOBAL VARIABLES ////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
 // Global configuration; reconfiguration managed by ViewMotionPlanner
 inline VmpConfig config;
+
+static std::random_device global_random_engine{};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// FUNCTIONS USING GLOBAL VARIABLES ////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
+static inline bool isInWorkspace(const octomap::point3d &p)
+{
+  return (p.x() >= config.ws_min_x && p.x() <= config.ws_max_x &&
+          p.y() >= config.ws_min_y && p.y() <= config.ws_max_y &&
+          p.z() >= config.ws_min_z && p.z() <= config.ws_max_z);
+}
+
+static inline bool isInSamplingRegion(const octomap::point3d &p)
+{
+  return (p.x() >= config.sr_min_x && p.x() <= config.sr_max_x &&
+          p.y() >= config.sr_min_y && p.y() <= config.sr_max_y &&
+          p.z() >= config.sr_min_z && p.z() <= config.sr_max_z);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// CONVERSION UTILITIES ////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
+static inline octomap::point3d toOctomath(const Eigen::Vector3d &point)
+{
+  return octomap::point3d(point(0), point(1), point(2));
+}
+
+static inline Eigen::Vector3d toEigen(const octomap::point3d &point)
+{
+  return Eigen::Vector3d(point.x(), point.y(), point.z());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// VISUALIZATION UTILITIES /////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////// OTHER UTILITIES /////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename RandomEngine>
+static inline octomap::point3d sampleRandomWorkspacePoint(RandomEngine &engine)
+{
+  std::uniform_real_distribution<float> x_dist(config.ws_min_x, config.ws_max_x);
+  std::uniform_real_distribution<float> y_dist(config.ws_min_y, config.ws_max_y);
+  std::uniform_real_distribution<float> z_dist(config.ws_min_z, config.ws_max_z);
+  octomap::point3d target(x_dist(engine), y_dist(engine), z_dist(engine));
+  return target;
+}
 
 /*
  * Adapted from: https://stackoverflow.com/a/26127012
@@ -32,6 +111,30 @@ static std::vector<octomath::Vector3> getFibonacciSphereVectors(size_t samples)
   return vectors;
 }
 
+/**
+ * Returns the given point on failure!
+*/
+template<typename PointT>
+PointT transform(const PointT &p, const std::string &from, const std::string &to, const tf2_ros::Buffer &tfBuffer)
+{
+  if (from == to)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(to, from, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform from " << from << " to " << to << " frame: " << e.what());
+    return p;
+  }
+
+  PointT pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
 
 /*
  * Algorithm from: Stark, Michael M. "Efficient construction of perpendicular vectors without branching." Journal of Graphics, GPU, and Game Tools 14.1 (2009): 55-62.
@@ -94,14 +197,21 @@ static inline tf2::Quaternion getQuatInDir(const octomath::Vector3 &dirVec)
   return quat;
 }
 
-static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp)
+// Check the code for hfov and vfov computation
+static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp,
+                                                             double hfov = 1.396263402,
+                                                             double vfov = 1.047197551,
+                                                             size_t x_steps = 9,
+                                                             size_t y_steps = 7,
+                                                             double maxRange = 1.0
+                                                             )
 {
   octomap::point3d_collection endpoints;
-  const double hfov = 80 * M_PI / 180.0;
-  const double vfov = 60 * M_PI / 180.0;
-  const size_t x_steps = 9;
-  const size_t y_steps = 7;
-  const double maxRange = 1.0;
+  //const double hfov = 80 * M_PI / 180.0; // 1,396263402
+  //const double vfov = 60 * M_PI / 180.0; // 1,047197551
+  //const size_t x_steps = 9;
+  //const size_t y_steps = 7;
+  //const double maxRange = 1.0;
 
   for (size_t i = 0; i < x_steps; i++)
   {
@@ -117,25 +227,27 @@ static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose
   return endpoints;
 }
 
-template<typename T>
-std::ostream& writeVector(std::ostream &os, double passed_time, const std::vector<T> &vec)
+void computePoseObservedCells(std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::pose6d &pose, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells)
 {
-  os << passed_time << ",";
+  octomap::point3d_collection endpoints = computeVpRaycastEndpoints(pose);
+  for (const octomap::point3d &end : endpoints)
+  {
+    mapping_manager->computeRayCells(pose.trans(), end, freeCells, occCells, unkCells);
+  }
+}
+
+
+template<typename T>
+std::ostream& writeVector(std::ostream &os, double passed_time, const std::vector<T> &vec, const std::string separator = ",")
+{
+  os << passed_time << separator;
   for (size_t i = 0; i < vec.size(); i++)
   {
     os << vec[i];
     if (i < vec.size() - 1)
-      os << ",";
+      os << separator;
   }
   return os;
 }
-
-enum class EvalEpisodeEndParam
-{
-  TIME = 0,
-  PLAN_DURATION = 1,
-  PLAN_LENGTH = 2,
-  NUM_EPEND_PARAMS = 3
-};
 
 } // namespace view_motion_planner

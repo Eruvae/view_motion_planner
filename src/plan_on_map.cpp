@@ -88,7 +88,7 @@ int main(int argc, char **argv)
                             NO_PLANNING_TREE_UPDATE, evaluate_results, eval_num_episodes, ep, eval_episode_duration);
   ROS_INFO_STREAM("PLANNER CREATED");
 
-  planner.getOctreeManager()->loadOctomap(argv[1]);
+  planner.getMappingManager()->loadFromFile(argv[1]);
 
   config.mode = Vmp_PLAN;
   planner.updateConfig();

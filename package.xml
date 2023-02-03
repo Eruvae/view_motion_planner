@@ -71,6 +71,11 @@
   <depend>roi_viewpoint_planner_msgs</depend>
   <depend>rosbag_storage</depend>
   <depend>moveit_visual_tools</depend>
+  <depend>voxblox</depend>
+  <depend>voxblox_ros</depend>
+  <depend>voxblox_msgs</depend>
+  <depend>rviz_visual_tools</depend>
+
   <!--depend>moveit_setup_assistant</depend-->
   <depend version_gt="0.3.1">srdfdom</depend>
   <depend>urdf</depend>

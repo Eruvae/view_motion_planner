@@ -29,6 +29,10 @@ set (CATKIN_DEPENDENCIES
     #moveit_setup_assistant
     urdf
     srdfdom
+    voxblox
+    voxblox_ros
+    voxblox_msgs
+    rviz_visual_tools
 )
 
 ## Find catkin macros and libraries
@@ -166,11 +170,12 @@ add_definitions(
 
 set(VIEW_MOTION_PLANNER_SRC_FILES
   src/view_motion_planner.cpp
-  src/octree_manager.cpp
   src/robot_manager.cpp
   src/viewpose_graph.cpp
   src/trolley_remote.cpp
   src/visualization_utils.cpp
+  src/mapping_manager/octree_manager.cpp
+  #src/mapping_manager/voxblox_manager.cpp
 )
 
 ## Declare a C++ library

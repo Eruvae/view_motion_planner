@@ -76,8 +76,6 @@ private:
   ros::ServiceClient resetVoxbloxMapClient;
   std_srvs::Empty emptySrv;
 
-  std::deque<ViewposePtr> past_viewposes_;
-
   void registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg);
 
 public:
@@ -86,42 +84,17 @@ public:
                 std::shared_ptr<RobotManager> robot_manager, size_t num_sphere_vecs = 1000,
                 bool update_planning_tree=true, bool initialize_evaluator=false);
 
-  double getEvalPassedTime()
-  {
-    return eval_passedTime;
-  }
-
-  double getEvalAccPlanDuration()
-  {
-    return eval_accumulatedPlanDuration;
-  }
-
-  double getEvalAccPlanLength()
-  {
-    return eval_accumulatedPlanLength;
-  }
-
   std::vector<ViewposePtr> sampleObservationPoses(double sensorRange=0.5);
-
   void waitForPointcloudWithRoi();
-
   void updateRoiTargets();
   bool getRandomRoiTarget(octomap::point3d &target);
-
   void updateExplTargets();
   bool getRandomExplTarget(octomap::point3d &target);
   bool getRandomBorderTarget(octomap::point3d &target);
-
   void updateTargets();
-
   ViewposePtr sampleRandomViewPose(TargetType type);
 
-  //std::shared_ptr<octomap_vpp::WorkspaceOcTree> computeObservationRegions(double inflation_radius=0.2);
-
-  std::shared_ptr<octomap_vpp::WorkspaceOcTree> getObservationRegions()
-  {
-    return observationRegions;
-  }
+  std::shared_ptr<octomap_vpp::WorkspaceOcTree> getObservationRegions() {return observationRegions;}
 
   bool computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, octomap::KeyRay& ray)
   {
@@ -168,59 +141,6 @@ public:
     }
   }
 
-  octomap::point3d sampleRandomWorkspacePoint()
-  {
-    std::uniform_real_distribution<float> x_dist(config.ws_min_x, config.ws_max_x);
-    std::uniform_real_distribution<float> y_dist(config.ws_min_y, config.ws_max_y);
-    std::uniform_real_distribution<float> z_dist(config.ws_min_z, config.ws_max_z);
-    octomap::point3d target(x_dist(random_engine), y_dist(random_engine), z_dist(random_engine));
-    return target;
-  }
-
-  template<typename PointT>
-  PointT transformToMapFrame(const PointT &p)
-  {
-    if (map_frame == ws_frame)
-      return p;
-
-    geometry_msgs::TransformStamped trans;
-    try
-    {
-      trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
-    }
-    catch (const tf2::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToMapFrame: " << e.what());
-      return p;
-    }
-
-    PointT pt;
-    tf2::doTransform(p, pt, trans);
-    return pt;
-  }
-
-  template<typename PointT>
-  PointT transformToWorkspace(const PointT &p)
-  {
-    if (map_frame == ws_frame)
-      return p;
-
-    geometry_msgs::TransformStamped trans;
-    try
-    {
-      trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
-    }
-    catch (const tf2::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
-      return p;
-    }
-
-    PointT pt;
-    tf2::doTransform(p, pt, trans);
-    return pt;
-  }
-
   bool isInWorkspace(const octomap::point3d &p)
   {
     return (p.x() >= config.ws_min_x && p.x() <= config.ws_max_x &&
@@ -243,35 +163,12 @@ public:
 
   void resetOctomap();
 
-  void randomizePlants(const geometry_msgs::Point &min, const geometry_msgs::Point &max, double min_dist);
+//  void randomizePlants(const geometry_msgs::Point &min, const geometry_msgs::Point &max, double min_dist);
 
   void publishMap();
   void publishObservationRegions();
   void publishObservationPoints(const octomap::KeySet &keys);
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
-
-//  bool startEvaluator();
-//  void setEvaluatorStartParams();
-//  bool saveEvaluatorData(double plan_length, double traj_duration);
-//  bool resetEvaluator();
-
-  inline void updatePastViewposesList(const ViewposePtr vp1, uint32_t max_history = 1000)
-  {
-    if(past_viewposes_.size() < max_history)
-    {
-      past_viewposes_.push_back(vp1);
-    }
-    else
-    {
-      past_viewposes_.pop_front();
-      past_viewposes_.push_back(vp1);
-    }
-  }
-
-  inline void clearPastViewposesList()
-  {
-    past_viewposes_.clear();
-  }
 };
 
 } // namespace view_motion_planner

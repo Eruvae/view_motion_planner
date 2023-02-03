@@ -7,10 +7,6 @@ namespace view_motion_planner
 
 visualization_msgs::Marker targetsToROSVisualizationMsg(const std::vector<octomap::point3d> &roi_targets, const std::vector<octomap::point3d> &expl_targets, const std::vector<octomap::point3d> &border_targets, std::string map_frame)
 {
-  static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
-  static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
-  static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
-
   const size_t NUM_P = roi_targets.size() + expl_targets.size() + border_targets.size();
 
   visualization_msgs::Marker m;

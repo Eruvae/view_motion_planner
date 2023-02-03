@@ -5,13 +5,16 @@
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_interface/planning_interface.h>
+#include <dynamic_reconfigure/server.h>
+#include <moveit_visual_tools/moveit_visual_tools.h>
 
 #include <roi_viewpoint_planner_msgs/VmpConfig.h>
-#include "view_motion_planner/octree_manager.h"
+
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose_graph.h"
-
 #include "view_motion_planner/trolley_remote.h"
+#include "view_motion_planner/mapping_manager/octree_manager.h"
+#include "view_motion_planner/visualization_utils.h"
 
 namespace view_motion_planner
 {
@@ -149,7 +152,7 @@ public:
 
   void graphBuilderThread();
 
-  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, octomap::KeySet &freeCells, octomap::KeySet &occCells, octomap::KeySet &unkCells);
+  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells);
 
   std::optional<Vertex> initCameraPoseGraph();
 
@@ -182,9 +185,9 @@ public:
     return robot_manager.get();
   }
 
-  OctreeManager* getOctreeManager()
+  BaseMappingManager* getMappingManager()
   {
-    return octree_manager.get();
+    return mapping_manager.get();
   }
 
   ViewposeGraphManager* getGraphManager()
@@ -225,7 +228,7 @@ private:
 
   std::shared_ptr<RobotManager> robot_manager;
   moveit_visual_tools::MoveItVisualToolsPtr vt_robot_state;
-  std::shared_ptr<OctreeManager> octree_manager;
+  std::shared_ptr<BaseMappingManager> mapping_manager;
   std::shared_ptr<ViewposeGraphManager> graph_manager;
 
   std::vector<ViewposePtr> observationPoses;
@@ -247,6 +250,7 @@ private:
   int trolley_current_segment = 0;
 
   ros::NodeHandle nh_;
+  tf2_ros::Buffer &tfBuffer;
 };
 
 } // namespace view_motion_planner

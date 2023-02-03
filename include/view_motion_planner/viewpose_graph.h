@@ -9,8 +9,11 @@
 #include <ompl/datastructures/NearestNeighbors.h>
 #include "view_motion_planner/viewpose.h"
 #include "view_motion_planner/robot_manager.h"
-#include "view_motion_planner/octree_manager.h"
+#include "view_motion_planner/mapping_manager/base_mapping_manager.h"
 #include "roi_viewpoint_planner_msgs/VmpConfig.h"
+#include <rviz_visual_tools/rviz_visual_tools.h>
+#include <octomap_vpp/octomap_pcl.h>
+#include <octomap_vpp/octomap_transforms.h>
 
 namespace view_motion_planner
 {
@@ -50,7 +53,7 @@ private:
   std::unordered_map<ViewposePtr, Vertex> vertex_map;
 
   std::shared_ptr<RobotManager> robot_manager;
-  std::shared_ptr<OctreeManager> octree_manager;
+  std::shared_ptr<BaseMappingManager> mapping_manager;
 
   std::unique_ptr<ompl::NearestNeighbors<ViewposePtr>> neighbors_joint;
   std::unique_ptr<ompl::NearestNeighbors<ViewposePtr>> neighbors_vpsim;
@@ -69,7 +72,7 @@ private:
 
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
-                       const std::shared_ptr<OctreeManager> &octree_manager,
+                       const std::shared_ptr<BaseMappingManager> &mapping_manager,
                        const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph);
 
   double getVertexDistancePose(ViewposePtr a, ViewposePtr b);
