@@ -49,6 +49,7 @@ private:
   ros::Publisher observationRegionsPub;
   ros::Publisher observatonPointsPub;
   ros::Publisher targetPub;
+  ros::Publisher coveragePub;
 
 #ifdef DBG_TARGETS_VPS
   ros::Publisher dbg_target_sample_pub;
@@ -241,6 +242,7 @@ public:
   void publishObservationPoints(const octomap::KeySet &keys);
   void publishObservationPoints(const std::vector<ViewposePtr> &vps);
   void publishTargets();
+  void publishCoverage();
 
   bool startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
                       bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,

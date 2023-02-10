@@ -9,6 +9,7 @@
 #include <octomap_vpp/octomap_pcl.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <std_msgs/Float64.h>
 
 #define RAYCAST_PARALLEL_LOOP
 
@@ -31,6 +32,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
   observatonPointsPub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("observation_points", 1);
   targetPub = nh.advertise<visualization_msgs::Marker>("targets", 1);
   //roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
+  coveragePub = nh.advertise<std_msgs::Float64>("samplingRegionCoverage", 1, true);
 
 #ifdef DBG_TARGETS_VPS
   dbg_target_sample_pub = nh.advertise<pcl::PointCloud<pcl::PointXYZ>>("dbg_target_sample", 1);
@@ -99,6 +101,7 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
   ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
   tree_mtx.unlock();
   publishMap();
+  publishCoverage();
 }
 
 void OctreeManager::waitForPointcloudWithRoi()
@@ -719,6 +722,25 @@ void OctreeManager::publishTargets()
     m.colors.push_back(COLOR_BLUE);
   }
   targetPub.publish(m);
+}
+
+void OctreeManager::publishCoverage()
+{
+  octomap::point3d min = transform(octomap::point3d(config.ws_min_x, config.ws_min_y, config.ws_min_z), ws_frame, map_frame);
+  octomap::point3d max = transform(octomap::point3d(config.ws_max_x, config.ws_max_y, config.ws_max_z), ws_frame, map_frame);
+  for (size_t i = 0; i < 3; i++)
+  {
+    if (min(i) > max(i))
+      std::swap(min(i), max(i));
+  }
+  std_msgs::Float64 msg;
+  static octomap_vpp::RoiOcTree::CoverageInfo last_ci;
+  auto ci = planningTree->getVolumeCoverage(min, max);
+  ROS_ERROR_STREAM("Cov: " << ci.covered_cells << ", " << ci.total_cells);
+  ROS_ERROR_STREAM("New cells: " << (ci.covered_cells - last_ci.covered_cells));
+  msg.data = static_cast<double>(ci.covered_cells) / static_cast<double>(ci.total_cells);
+  coveragePub.publish(msg);
+  last_ci = ci;
 }
 
 bool OctreeManager::startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
