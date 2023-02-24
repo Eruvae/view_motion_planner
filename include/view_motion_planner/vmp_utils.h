@@ -8,6 +8,11 @@
 #include <tf2_ros/transform_listener.h>
 #include <rvp_evaluation/compute_cubes.h> // !!!!!!!!!
 #include <view_motion_planner/mapping_manager/base_mapping_manager.h>
+#include <vector>
+#include <visualization_msgs/Marker.h>
+#include <octomap_vpp/RoiOcTree.h>
+#include <Eigen/Dense>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace view_motion_planner
 {
@@ -29,10 +34,14 @@ enum class EvalEpisodeEndParam
 ////////////////////// GLOBAL VARIABLES ////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+// TODO: lazy initialzed singleton?
+
 // Global configuration; reconfiguration managed by ViewMotionPlanner
 inline VmpConfig config;
 
-static std::random_device global_random_engine{};
+inline std::random_device global_random_engine{};
+
+// TODO: inline tf buffer?
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +82,57 @@ static inline Eigen::Vector3d toEigen(const octomap::point3d &point)
 ////////////////////// VISUALIZATION UTILITIES /////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////
 
-// TODO
+// lambda initialization trick
+static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
+static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
+static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
+
+static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std::vector<octomap::point3d> &roi_targets, 
+                                                        const std::vector<octomap::point3d> &expl_targets, 
+                                                        const std::vector<octomap::point3d> &border_targets, 
+                                                        std::string map_frame)
+{
+  const size_t NUM_P = roi_targets.size() + expl_targets.size() + border_targets.size();
+
+  visualization_msgs::Marker m;
+  m.header.frame_id = map_frame;
+  m.header.stamp = ros::Time();
+  m.ns = "targets";
+  m.id = 0;
+  m.type = visualization_msgs::Marker::POINTS;
+  m.action = visualization_msgs::Marker::ADD;
+  m.pose.orientation.w = 1.0;
+  m.scale.x = 0.005;
+  m.scale.y = 0.005;
+  m.color.a = 1.0;
+
+  if (NUM_P == 0)
+  {
+    ROS_WARN("No targets. Returning an empty visualization msg!");
+    return m;
+  }
+
+  m.points.reserve(NUM_P);
+  m.colors.reserve(NUM_P);
+
+  for (const octomap::point3d &p : roi_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_RED);
+  }
+  for (const octomap::point3d &p : expl_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_GREEN);
+  }
+  for (const octomap::point3d &p : border_targets)
+  {
+    m.points.push_back(octomap::pointOctomapToMsg(p));
+    m.colors.push_back(COLOR_BLUE);
+  }
+
+  return m;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,7 +257,7 @@ static inline tf2::Quaternion getQuatInDir(const octomath::Vector3 &dirVec)
 }
 
 // Check the code for hfov and vfov computation
-static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp,
+static inline octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose6d &vp,
                                                              double hfov = 1.396263402,
                                                              double vfov = 1.047197551,
                                                              size_t x_steps = 9,
@@ -227,13 +286,101 @@ static octomap::point3d_collection computeVpRaycastEndpoints(const octomap::pose
   return endpoints;
 }
 
-void computePoseObservedCells(std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::pose6d &pose, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells)
+// TODO
+static inline void computePoseObservedCells(std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells)
 {
   octomap::point3d_collection endpoints = computeVpRaycastEndpoints(pose);
   for (const octomap::point3d &end : endpoints)
   {
-    mapping_manager->computeRayCells(pose.trans(), end, freeCells, occCells, unkCells);
+    ROS_FATAL("not implemented!");
+    //mapping_manager->computeRayCells(pose.trans(), end, freeCells, occCells, unkCells);
   }
+}
+
+static inline bool computeRayNodes(const std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::point3d& origin, const octomap::point3d& end, std::vector<MappingNode> &nodes)
+{
+  MappingKeyRay ray;
+  bool res = mapping_manager->computeRayKeys(origin, end, ray);
+  if (!res) return false;
+
+  res = false;
+  for (const MappingKey& key: ray)
+  {
+    MappingNode node = mapping_manager->search(key);
+    if (node.state > MappingNodeState::ERROR)
+    {
+      nodes.push_back(node);
+      res = true;
+    }
+  }
+  return res;
+}
+
+static inline void countNodes(const std::vector<MappingNode> &nodes, int& unknown, int& free, int& non_roi, int& roi)
+{
+  for (const MappingNode& node: nodes)
+  {
+    if (node.state == MappingNodeState::ERROR)
+    {
+      ROS_WARN("countNodes: node state shouldn't be ERROR. Something is not ok.");
+    }
+    else if (node.state == MappingNodeState::UNKNOWN)
+    {
+      unknown++;
+    }
+    else if (node.state == MappingNodeState::FREE)
+    {
+      free++;
+    }
+    else if (node.state == MappingNodeState::NON_ROI)
+    {
+      non_roi++;
+    }
+    else if (node.state == MappingNodeState::ROI)
+    {
+      roi++;
+    }
+  }
+}
+
+static inline void moveOctomap(octomap_vpp::RoiOcTree* &tree, const geometry_msgs::Transform &offset)
+{
+  bool translate_tree = (offset.translation.x != 0 || offset.translation.y != 0 || offset.translation.z != 0);
+  bool rotate_tree =  (offset.rotation.x != 0 || offset.rotation.y != 0 || offset.rotation.z != 0);
+
+  if (!translate_tree && !rotate_tree)
+    return;
+
+  octomap_vpp::RoiOcTree *moved_tree(new octomap_vpp::RoiOcTree(tree->getResolution()));
+
+  if (!rotate_tree) // no rotation needed, simply offset keys
+  {
+    const octomap::OcTreeKey ZERO_KEY = tree->coordToKey(0, 0, 0);
+    const octomap::OcTreeKey OFFSET_KEY = tree->coordToKey(offset.translation.x, offset.translation.y, offset.translation.z);
+    auto addOffset = [&ZERO_KEY, &OFFSET_KEY](const octomap::OcTreeKey &key)
+    {
+      return octomap::OcTreeKey(key[0] - ZERO_KEY[0] + OFFSET_KEY[0], key[1] - ZERO_KEY[1] + OFFSET_KEY[1], key[2] - ZERO_KEY[2] + OFFSET_KEY[2]);
+    };
+    for (auto it = tree->begin_leafs(), end = tree->end_leafs(); it != end; it++)
+    {
+      octomap::OcTreeKey insertKey = addOffset(it.getKey());
+      octomap_vpp::RoiOcTreeNode *node = moved_tree->setNodeValue(insertKey, it->getLogOdds(), true);
+      node->setRoiLogOdds(it->getRoiLogOdds());
+    }
+  }
+  else // fully transform coordinate
+  {
+    octomap::pose6d transform = octomap_vpp::transformToOctomath(offset);
+    for (auto it = tree->begin_leafs(), end = tree->end_leafs(); it != end; it++)
+    {
+      octomap::point3d insertPoint = transform.transform(it.getCoordinate());
+      octomap_vpp::RoiOcTreeNode *node = moved_tree->setNodeValue(insertPoint, it->getLogOdds(), true);
+      node->setRoiLogOdds(it->getRoiLogOdds());
+    }
+  }
+
+  delete tree;
+  tree = moved_tree;
 }
 
 
@@ -248,6 +395,21 @@ std::ostream& writeVector(std::ostream &os, double passed_time, const std::vecto
       os << separator;
   }
   return os;
+}
+
+static inline std::string generateFilename(const std::string &name, bool name_is_prefix)
+{
+  std::stringstream fName;
+  fName << name;
+  if (name_is_prefix)
+  {
+    const boost::posix_time::ptime curDateTime = boost::posix_time::second_clock::local_time();
+    boost::posix_time::time_facet *const timeFacet = new boost::posix_time::time_facet("%Y-%m-%d-%H-%M-%S");
+    fName.imbue(std::locale(fName.getloc(), timeFacet));
+    fName << "_" << curDateTime;
+  }
+  fName << ".ot";
+  return fName.str();
 }
 
 } // namespace view_motion_planner

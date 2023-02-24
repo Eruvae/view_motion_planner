@@ -6,6 +6,7 @@
 //#include <ompl/datastructures/NearestNeighborsGNATNoThreadSafety.h>
 //#include <ompl/datastructures/NearestNeighborsLinear.h>
 //#include <ompl/datastructures/NearestNeighborsSqrtApprox.h>
+#include <view_motion_planner/vmp_utils.h>
 
 namespace view_motion_planner
 {
@@ -255,7 +256,7 @@ bool ViewposeGraphManager::expand()
     }
     target->addPredecessor(vp, t);
     if (!target->visited) // don't compute new cells for already visited targets
-      mapping_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
+      computePoseObservedCells(mapping_manager, octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
 
     target->computeUtility();
     if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)

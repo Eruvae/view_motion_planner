@@ -339,7 +339,9 @@ void ViewMotionPlanner::graphBuilderThread()
     else
       type = TARGET_BORDER;
 
-    ViewposePtr vp = sampleRandomViewPose(type);
+    ROS_FATAL("ViewposePtr vp = sampleRandomViewPose(type); !!!!!!");
+    //ViewposePtr vp = sampleRandomViewPose(type);
+    ViewposePtr vp = nullptr;
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
@@ -356,34 +358,6 @@ void ViewMotionPlanner::graphBuilderThread()
     }
   }
   graph_builder_condition.confirm_shutdown();
-}
-
-void ViewMotionPlanner::computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells)
-{
-
-  //octomap::pose6d viewpose = mapping_manager->transformToMapFrame(robot_manager->getRobotStatePose(state));
-
-  octomap::pose6d viewpose;
-  if (map_frame == ws_frame)
-  {
-    viewpose = robot_manager->getRobotStatePose(state);
-  }
-  else
-  {
-    geometry_msgs::TransformStamped trans;
-    try
-    {
-      trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
-    }
-    catch (const tf2::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToMapFrame: " << e.what());
-      return;
-    }
-    tf2::doTransform(robot_manager->getRobotStatePose(state), viewpose, trans);
-  }
-
-  mapping_manager->computePoseObservedCells(viewpose, freeCells, occCells, unkCells);
 }
 
 std::optional<Vertex> ViewMotionPlanner::initCameraPoseGraph()
@@ -490,7 +464,7 @@ bool ViewMotionPlanner::executePath()
       bool success = robot_manager->executeTrajectory(traj);
       moved = true;
       graph_manager->markAsVisited(*next_start_vertex);
-      mapping_manager->waitForPointcloudWithRoi();
+      waitForPointcloudWithRoi();
       if (evaluation_mode)
       {
         ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
@@ -529,14 +503,14 @@ void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double durati
   /*bool start_connected = */buildGraph();
 
   if (config.mode < Vmp_PLAN && config.insert_scan_if_not_moved)
-    mapping_manager->waitForPointcloudWithRoi();
+    waitForPointcloudWithRoi();
 
   while (ros::ok() && config.mode >= Vmp_PLAN)
   {
     if (!searchPath() || config.mode < Vmp_PLAN_AND_EXECUTE)
     {
       if (config.insert_scan_if_not_moved)
-        mapping_manager->waitForPointcloudWithRoi();
+        waitForPointcloudWithRoi();
 
       break;
     }
@@ -544,7 +518,7 @@ void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double durati
     bool moved = executePath();
 
     if (!moved && config.insert_scan_if_not_moved)
-      mapping_manager->waitForPointcloudWithRoi();
+      waitForPointcloudWithRoi();
 
     // TODO: Rework
     // if ( (ep == EvalEpisodeEndParam::TIME && mapping_manager->getEvalPassedTime() > duration) ||
@@ -566,14 +540,14 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
   /*bool start_connected = */buildGraph();
 
   if (config.mode < Vmp_PLAN && config.insert_scan_if_not_moved)
-    mapping_manager->waitForPointcloudWithRoi();
+    waitForPointcloudWithRoi();
 
   while (ros::ok() && config.mode >= Vmp_PLAN && ros::Time::now() < end_time)
   {
     if (!searchPath())
     {
       if (config.insert_scan_if_not_moved)
-        mapping_manager->waitForPointcloudWithRoi();
+        waitForPointcloudWithRoi();
 
       break; // TODO: make configurable
     }
@@ -584,7 +558,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     bool moved = executePath();
 
     if (!moved && config.insert_scan_if_not_moved)
-      mapping_manager->waitForPointcloudWithRoi();
+      waitForPointcloudWithRoi();
 
     resumeGraphBuilderThreads();
     ros::Duration(config.graph_building_time).sleep();
@@ -620,14 +594,14 @@ void ViewMotionPlanner::exploreNamedPoses()
   for (const std::string &pose : pose_list)
   {
     robot_manager->moveToNamedPose(pose);
-    mapping_manager->waitForPointcloudWithRoi();
+    waitForPointcloudWithRoi();
   }
 }
 
 void ViewMotionPlanner::plannerLoop()
 {    
   ROS_INFO_STREAM("PLANNER LOOP CALLED");
-  mapping_manager->waitForPointcloudWithRoi();
+  waitForPointcloudWithRoi();
   pose_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this)));
   //graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
   pose_visualizer_condition.resume();
@@ -651,7 +625,7 @@ void ViewMotionPlanner::plannerLoop()
       robot_manager->moveToHomePose();
       mapping_manager->resetMap();
       graph_manager->clear();
-      mapping_manager->waitForPointcloudWithRoi();
+      waitForPointcloudWithRoi();
 
       ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
       //mapping_manager->resetEvaluator();
@@ -681,7 +655,7 @@ void ViewMotionPlanner::plannerLoop()
         graph_manager->clear();
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
         const std::string TROLLEY_TREE_PREFIX = "trolleyTree_segment";
-        mapping_manager->saveToFile(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true);
+        mapping_manager->saveToFile(generateFilename(TROLLEY_TREE_PREFIX + std::to_string(trolley_current_segment), true));
         graph_manager->clear();
         ROS_INFO_STREAM("Moving to home pose");
         robot_manager->moveToHomePose();
@@ -696,7 +670,7 @@ void ViewMotionPlanner::plannerLoop()
         trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
         for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
         ros::Duration(5).sleep(); // wait for transform to update
-        mapping_manager->waitForPointcloudWithRoi();
+        waitForPointcloudWithRoi();
         /*ROS_INFO_STREAM("Moving up");
         double h = trolley_remote.getHeight();
         ROS_INFO_STREAM("Height: " << h);
@@ -718,7 +692,7 @@ void ViewMotionPlanner::plannerLoop()
       else if (config.mode == Vmp_MAP_ONLY)
       {
         ROS_INFO_STREAM("PLANNER MAPPING");
-        mapping_manager->waitForPointcloudWithRoi();
+        waitForPointcloudWithRoi();
       }
       else
       {
@@ -733,15 +707,9 @@ void ViewMotionPlanner::plannerLoop()
   }*/
 }
 
-/*bool ViewMotionPlanner::plannerLoopOnce()
+void ViewMotionPlanner::waitForPointcloudWithRoi()
 {
-  std::vector<ViewposePtr> newPoses = mapping_manager->sampleObservationPoses();
-  observationPoseMtx.lock();
-  observationPoses = newPoses;
-  observationPoseMtx.unlock();
-  mapping_manager->publishObservationPoints(newPoses);
-  //generateViewposeGraph();
-  return false;
-}*/
+  ROS_FATAL("not implemented yet!");
+}
 
 } // namespace view_motion_planner

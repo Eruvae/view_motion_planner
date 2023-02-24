@@ -14,7 +14,7 @@
 #include "view_motion_planner/viewpose_graph.h"
 #include "view_motion_planner/trolley_remote.h"
 #include "view_motion_planner/mapping_manager/octree_manager.h"
-#include "view_motion_planner/visualization_utils.h"
+#include "view_motion_planner/vmp_utils.h"
 
 namespace view_motion_planner
 {
@@ -152,8 +152,6 @@ public:
 
   void graphBuilderThread();
 
-  void computeStateObservedVoxels(const moveit::core::RobotStatePtr &state, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells);
-
   std::optional<Vertex> initCameraPoseGraph();
 
   bool buildGraph();
@@ -177,6 +175,8 @@ public:
   void exploreNamedPoses();
 
   void plannerLoop();
+
+  void waitForPointcloudWithRoi();
 
   //bool plannerLoopOnce(); // returns true if moved
 

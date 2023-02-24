@@ -173,7 +173,6 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/robot_manager.cpp
   src/viewpose_graph.cpp
   src/trolley_remote.cpp
-  src/visualization_utils.cpp
   src/mapping_manager/octree_manager.cpp
   #src/mapping_manager/voxblox_manager.cpp
 )

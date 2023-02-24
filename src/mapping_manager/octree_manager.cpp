@@ -1,67 +1,167 @@
+//////////////////////////////////////
 #include <view_motion_planner/mapping_manager/octree_manager.h>
+//////////////////////////////////////
+#include <view_motion_planner/vmp_utils.h> // moveOctomap
 
 namespace view_motion_planner
 {
 
-OctreeManager::OctreeManager(ros::NodeHandle nh, std::string frame_id): nh(nh), frame_id(frame_id), resolution(resolution)
+
+OctreeManager::OctreeManager(ros::NodeHandle &nh, const std::string& map_frame): nh(nh), map_frame(map_frame), resolution(resolution)
 {
-  planningTree.reset(new octomap_vpp::RoiOcTree(resolution));
+  planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
 }
 
-BaseMappingKeyRayPtr OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end)
-{
-  BaseMappingKeyRayPtr ray = createEmptyKeyRay();
 
+void OctreeManager::resetMap()
+{
+  planning_tree->clear();
+}
+
+
+MappingKey OctreeManager::coordToKey(const octomap::point3d &coord)
+{
+  octomap::OcTreeKey key = planning_tree->coordToKey(coord);
+  return toMappingKey(key);
+}
+
+
+bool OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, MappingKeyRay& ray)
+{
   tree_mtx.lock();
   octomap::KeyRay octomap_ray;
-  bool ret = planningTree->computeRayKeys(origin, end, octomap_ray);
+  bool ret = planning_tree->computeRayKeys(origin, end, octomap_ray);
   tree_mtx.unlock();
 
-  if (!ret)
-  {
-    return ray;
-  }
+  if (!ret) return false;
 
-  for (auto r : octomap_ray)
-  {
-    OctreeMappingKey key;
-    key[0] = r[0];
-    key[1] = r[1];
-    key[2] = r[2];
-    ray->push_back(key);
-  }
+  // Append found keys to the given ray
+  MappingKeyRay mapping_key_ray = toMappingKeyRay(octomap_ray);
+  ray.insert(ray.end(), mapping_key_ray.begin(), mapping_key_ray.end());
 
-  return ray;
+  return true;
 }
 
-bool OctreeManager::computeRayCells(const octomap::point3d& origin, const octomap::point3d& end, BaseMappingKeySetPtr &freeCells, BaseMappingKeySetPtr &occCells, BaseMappingKeySetPtr &unkCells)
+
+bool OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
+{
+  // TODO
+  ROS_FATAL("computeNeighborKeys is not implemented");
+  return false;
+}
+
+
+MappingNode OctreeManager::search(const MappingKey& key)
 {
   tree_mtx.lock();
-  BaseMappingKeyRayPtr ray;
-  BaseMappingKeyRayPtr ray = computeRayKeys(origin, end);
+  octomap::OcTreeKey key_ = toOcTreeKey(key);
+  octomap_vpp::RoiOcTreeNode* node_ = planning_tree->search(key_);
 
-  if (ray->size() == 0)
+  if (node_ == NULL)
   {
     tree_mtx.unlock();
-    return false;
+    MappingNode node;
+    node.state = UNKNOWN;
+    return node;
   }
-  for (const BaseMappingKey &key : ray)
+
+  MappingNode node;
+  node.occ_p = node_->getOccupancy();
+  node.roi_p = node_->getRoiProb();
+
+  if (node.occ_p < 0.5)
   {
-    const octomap_vpp::RoiOcTreeNode *node = planningTree->search(key);
-    octomap_vpp::NodeState state = planningTree->getNodeState(node, octomap_vpp::NodeProperty::OCCUPANCY);
-    if (state == octomap_vpp::NodeState::FREE_NONROI)
-      freeCells->insert(key);
-    else if (state == octomap_vpp::NodeState::UNKNOWN)
-      unkCells->insert(key);
-    else
-    {
-      occCells->insert(key);
-      break;
-    }
+    node.state = FREE;
   }
+  else if (node.roi_p < 0.5)
+  {
+    node.state = NON_ROI;
+  }
+  else //if (node.roi_p >= 0.5)
+  {
+    node.state = ROI;
+  }
+
+  tree_mtx.unlock();
+  return node;
+}
+
+
+bool OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
+{
+  Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
+  Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
+  bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+
+  octomap::Pointcloud inlierCloud, outlierCloud, fullCloud;
+  if (apply_tf)
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, pc_transform, inlierCloud, outlierCloud, fullCloud);
+  else
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
+
+  tree_mtx.lock();
+  ros::Time insertStartTime(ros::Time::now());
+  const octomap::point3d scan_orig(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
+  planning_tree->insertPointCloud(fullCloud, scan_orig);
+  planning_tree->insertRegionScan(inlierCloud, outlierCloud);
+  ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insertStartTime) << " s");
+  ros::Time updateTargetStartTime(ros::Time::now());
   tree_mtx.unlock();
   return true;
 }
 
+
+bool OctreeManager::saveToFile(const std::string &filename, bool overwrite)
+{
+  // TODO
+  if (!overwrite)
+  {
+    ROS_ERROR("saveToFile: not implemented. exiting the function.");
+    return false;
+  }
+
+  tree_mtx.lock();
+  bool result = planning_tree->write(filename);
+  tree_mtx.unlock();
+  return result;
+}
+
+int OctreeManager::loadFromFile(const std::string &filename, const geometry_msgs::Transform &offset)
+{
+  Eigen::Translation3d translation_(offset.translation.x, offset.translation.y, offset.translation.z);
+  Eigen::Quaterniond rotation_(offset.rotation.w, offset.rotation.x, offset.rotation.y, offset.rotation.z);
+  bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+
+  octomap_vpp::RoiOcTree *map = nullptr;
+  octomap::AbstractOcTree *tree =  octomap::AbstractOcTree::read(filename);
+  if (!tree)
+    return -1;
+
+  map = dynamic_cast<octomap_vpp::RoiOcTree*>(tree);
+  if(!map)
+  {
+    delete tree;
+    return -2;
+  }
+
+  if (apply_tf)
+  {
+    moveOctomap(map, offset);
+  }
+
+  tree_mtx.lock();
+  planning_tree.reset(map);
+  planning_tree->computeRoiKeys();
+  tree_mtx.unlock();
+  publishMap();
+  return 0;
+}
+
+
+void OctreeManager::publishMap()
+{
+  // TODO
+  ROS_FATAL("not implemented");
+}
 
 } // namespace view_motion_planner

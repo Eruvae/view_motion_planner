@@ -7,7 +7,7 @@
 #include <octomap/OcTreeKey.h>
 #include <octomap/octomap_types.h>
 
-#include "view_motion_planner/mapping_manager/base_mapping_key.h"
+#include "view_motion_planner/mapping_manager/mapping_key.h"
 #include "vmp_utils.h"
 
 namespace view_motion_planner
@@ -34,9 +34,9 @@ struct Viewpose
   double accumulated_cost = 0;
   double accumulated_infogain = 0;
   double accumulated_utility = 0;
-  BaseMappingKeySetPtr freeCells;
-  BaseMappingKeySetPtr occCells;
-  BaseMappingKeySetPtr unkCells;
+  MappingKeySet freeCells;
+  MappingKeySet occCells;
+  MappingKeySet unkCells;
   ViewposePtr pred = nullptr;
   TrajectoryPtr pred_edge = nullptr;
   size_t target_verts_on_path = 0;
@@ -68,9 +68,9 @@ struct Viewpose
     this->pred = nullptr;
     this->pred_edge = nullptr;
 
-    freeCells->clear();
-    occCells->clear();
-    unkCells->clear();
+    freeCells.clear();
+    occCells.clear();
+    unkCells.clear();
 
     accumulated_cost = 0;
     accumulated_infogain = 0;
@@ -83,9 +83,9 @@ struct Viewpose
   void computeUtility()
   {
     if (config.ig_type == Vmp_UNK_CELLS_WEIGHTED_TARGET)
-      accumulated_infogain = static_cast<double>(unkCells->size()) * static_cast<double>(target_verts_on_path + 1) / static_cast<double>(total_verts_on_path + 1);
+      accumulated_infogain = static_cast<double>(unkCells.size()) * static_cast<double>(target_verts_on_path + 1) / static_cast<double>(total_verts_on_path + 1);
     else
-      accumulated_infogain = static_cast<double>(unkCells->size());
+      accumulated_infogain = static_cast<double>(unkCells.size());
 
     accumulated_utility = accumulated_cost > 0 ? accumulated_infogain / accumulated_cost : 0;
   }
