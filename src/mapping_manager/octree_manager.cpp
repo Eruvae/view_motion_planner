@@ -16,6 +16,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, const std::string& map_frame):
 void OctreeManager::resetMap()
 {
   planning_tree->clear();
+  planning_tree->clearRoiKeys();
 }
 
 
@@ -45,9 +46,15 @@ bool OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap
 
 bool OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
 {
-  // TODO
-  ROS_FATAL("computeNeighborKeys is not implemented");
-  return false;
+  // TODO: add key limit checking?
+  for (int i = 0; i < (int)connectivity; i++)
+  {
+    //octomap::OcTreeKey neighbour_key(point.x + octomap_vpp::nbLut[i][0], point.y + octomap_vpp::nbLut[i][1], point.z + octomap_vpp::nbLut[i][2]);
+    //set.insert(toMappingKey(neighbour_key));
+    MappingKey neighbour_key(point.x + octomap_vpp::nbLut[i][0], point.y + octomap_vpp::nbLut[i][1], point.z + octomap_vpp::nbLut[i][2]);
+    set.insert(neighbour_key);
+  }
+  return true;
 }
 
 
