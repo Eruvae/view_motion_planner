@@ -603,6 +603,7 @@ void ViewMotionPlanner::plannerLoop()
   ROS_INFO_STREAM("PLANNER LOOP CALLED");
   waitForPointcloudWithRoi();
   pose_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this)));
+  publish_map_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::publishMapThread, this)));
   //graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
   pose_visualizer_condition.resume();
   //graph_visualizer_condition.resume();
@@ -737,11 +738,19 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
   }
   
   bool result = mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
+  //need_to_publish_map = need_to_publish_map || result;
+}
 
-  // TODO: rate limiting?
-  // TODO: move publishMap to a separate thread because this is gonna block a lot of things
-  if (result)
-    mapping_manager->publishMap();
+void ViewMotionPlanner::publishMapThread()
+{
+  ros::Rate r(0.2); // every 5 seconds
+  while (ros::ok())
+  {
+    //if (need_to_publish_map)
+      mapping_manager->publishMap();
+    r.sleep();
+  }
+  
 }
 
 } // namespace view_motion_planner

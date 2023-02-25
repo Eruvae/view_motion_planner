@@ -27,6 +27,7 @@ class PauseCondition
 private:
   bool is_paused = true;
   bool do_shutdown = false;
+  //bool need_to_publish_map = false;
   size_t started_threads = 0;
   size_t waiting_threads = 0;
   boost::mutex pause_mutex;
@@ -146,6 +147,8 @@ public:
 
   void publishSamplingRegionMarker();
 
+  void publishMapThread();
+
   void poseVisualizeThread();
 
   void graphVisualizeThread();
@@ -239,6 +242,7 @@ private:
   boost::condition_variable graph_building_pause_change;
 
   boost::thread pose_visualize_thread;
+  boost::thread publish_map_thread;
   boost::thread graph_visualize_thread;
 
   std::vector<boost::thread> graph_builder_threads;
