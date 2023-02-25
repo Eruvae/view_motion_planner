@@ -743,7 +743,7 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
 
 void ViewMotionPlanner::publishMapThread()
 {
-  ros::Rate r(0.2); // every 5 seconds
+  ros::Rate r(0.2); // TODO: can be parametrized
   while (ros::ok())
   {
     //if (need_to_publish_map)

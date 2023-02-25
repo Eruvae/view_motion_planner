@@ -4,6 +4,7 @@
 #include <view_motion_planner/vmp_utils.h> // moveOctomap
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
+#include <filesystem>
 
 namespace view_motion_planner
 {
@@ -124,11 +125,14 @@ bool OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
 
 bool OctreeManager::saveToFile(const std::string &filename, bool overwrite)
 {
-  // TODO
   if (!overwrite)
   {
-    ROS_ERROR("saveToFile: not implemented. exiting the function.");
-    return false;
+    const std::filesystem::path p = filename;
+    if (std::filesystem::exists(p))
+    {
+      ROS_ERROR("Can't save the map. File already exists: %s", filename.c_str());
+      return false;
+    }
   }
 
   tree_mtx.lock();
