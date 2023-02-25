@@ -709,7 +709,34 @@ void ViewMotionPlanner::plannerLoop()
 
 void ViewMotionPlanner::waitForPointcloudWithRoi()
 {
-  ROS_FATAL("not implemented yet!");
+  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(2.0));
+  
+  geometry_msgs::Transform pc_transform;
+  if (msg->cloud.header.frame_id != map_frame)
+  {
+    try
+    {
+      geometry_msgs::TransformStamped tmp_ = tfBuffer.lookupTransform(map_frame, msg->cloud.header.frame_id, msg->cloud.header.stamp);
+      pc_transform = tmp_.transform;
+    }
+    catch (const tf2::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Couldn't find transform to map frame in registerPointcloudWithRoi: " << e.what());
+      return;
+    }
+  }
+  else
+  {
+    pc_transform.rotation.x = 0.0;
+    pc_transform.rotation.y = 0.0;
+    pc_transform.rotation.z = 0.0;
+    pc_transform.rotation.w = 1.0;
+    pc_transform.rotation.x = 0.0;
+    pc_transform.rotation.y = 0.0;
+    pc_transform.rotation.z = 0.0;
+  }
+  
+  mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
 }
 
 } // namespace view_motion_planner
