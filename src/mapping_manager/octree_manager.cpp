@@ -2,14 +2,17 @@
 #include <view_motion_planner/mapping_manager/octree_manager.h>
 //////////////////////////////////////
 #include <view_motion_planner/vmp_utils.h> // moveOctomap
+#include <octomap_msgs/Octomap.h>
+#include <octomap_msgs/conversions.h>
 
 namespace view_motion_planner
 {
 
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, const std::string& map_frame): nh(nh), map_frame(map_frame), resolution(resolution)
+OctreeManager::OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution)
 {
   planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
+  octomap_pub = priv_nh.advertise<octomap_msgs::Octomap>("octomap", 1);
 }
 
 
@@ -17,6 +20,7 @@ void OctreeManager::resetMap()
 {
   planning_tree->clear();
   planning_tree->clearRoiKeys();
+  publishMap(); // for clearing the map on rviz
 }
 
 
@@ -167,8 +171,23 @@ int OctreeManager::loadFromFile(const std::string &filename, const geometry_msgs
 
 void OctreeManager::publishMap()
 {
-  // TODO
-  ROS_FATAL("not implemented");
+  if (octomap_pub.getNumSubscribers() <= 0) return; // skip if no one subscribed...
+
+  // TODO: full map publishing is not efficient. maybe publish only the changes?
+  octomap_msgs::Octomap map_msg;
+  map_msg.header.frame_id = map_frame;
+  map_msg.header.stamp = ros::Time::now();
+  tree_mtx.lock();
+  bool msg_generated = octomap_msgs::fullMapToMsg(*planning_tree, map_msg);
+  tree_mtx.unlock();
+
+  if (!msg_generated)
+  {
+    ROS_ERROR("publishMap: Couldn't generate the map!");
+    return;
+  }
+
+  octomap_pub.publish(map_msg);
 }
 
 } // namespace view_motion_planner

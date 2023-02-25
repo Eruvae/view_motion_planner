@@ -176,7 +176,7 @@ public:
 
   void plannerLoop();
 
-  void waitForPointcloudWithRoi();
+  void waitForPointcloudWithRoi(double max_wait = 2.0);
 
   //bool plannerLoopOnce(); // returns true if moved
 
@@ -250,6 +250,7 @@ private:
   int trolley_current_segment = 0;
 
   ros::NodeHandle nh_;
+  ros::NodeHandle priv_nh_;
   tf2_ros::Buffer &tfBuffer;
 };
 

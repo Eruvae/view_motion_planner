@@ -5,6 +5,7 @@
 #include "octree_type_conversions.h"
 //////////////////////////////////////
 #include <octomap_vpp/RoiOcTree.h>
+#include <ros/ros.h>
 
 namespace view_motion_planner
 {
@@ -12,15 +13,17 @@ namespace view_motion_planner
 class OctreeManager: public BaseMappingManager
 {
 private:
-  std::string map_frame;
   ros::NodeHandle nh;
+  ros::NodeHandle priv_nh;
+  std::string map_frame;
   double resolution;
+  ros::Publisher octomap_pub;
 
   boost::mutex tree_mtx;
   std::shared_ptr<octomap_vpp::RoiOcTree> planning_tree;
 
 public:
-  OctreeManager(ros::NodeHandle &nh, const std::string& map_frame);
+  OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);
 
   ////////////// Pure abstract methods from BaseMappingManager /////////////
   // MAP ACCESS/MODIFICATION

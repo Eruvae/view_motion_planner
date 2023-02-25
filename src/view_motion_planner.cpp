@@ -11,6 +11,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
                                      const std::string &group_name, const std::string &ee_link_name, double tree_resolution, size_t graph_builder_threads,
                                      bool update_planning_tree, bool evaluation_mode, size_t eval_num_episodes, EvalEpisodeEndParam ep, double eval_episode_duration)
   : nh_(nh),
+    priv_nh_("~"),
     tfBuffer(tfBuffer),
     random_engine(std::random_device{}()),
     map_frame(map_frame),
@@ -29,9 +30,8 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     graph_manager(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
-
   //mapping_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),7
-  mapping_manager.reset(new OctreeManager(nh, map_frame));
+  mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
 
 
   workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);
@@ -707,9 +707,9 @@ void ViewMotionPlanner::plannerLoop()
   }*/
 }
 
-void ViewMotionPlanner::waitForPointcloudWithRoi()
+void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
 {
-  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(2.0));
+  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(max_wait));
   
   geometry_msgs::Transform pc_transform;
   if (msg->cloud.header.frame_id != map_frame)
@@ -736,7 +736,12 @@ void ViewMotionPlanner::waitForPointcloudWithRoi()
     pc_transform.rotation.z = 0.0;
   }
   
-  mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
+  bool result = mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
+
+  // TODO: rate limiting?
+  // TODO: move publishMap to a separate thread because this is gonna block a lot of things
+  if (result)
+    mapping_manager->publishMap();
 }
 
 } // namespace view_motion_planner
