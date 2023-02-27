@@ -101,7 +101,7 @@ void OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
   ROS_INFO_STREAM("ROI targets: " << current_roi_targets.size() << ", Expl. targets: " << current_expl_targets.size());
   tree_mtx.unlock();
   publishMap();
-  publishCoverage();
+  //publishCoverage();
 }
 
 void OctreeManager::waitForPointcloudWithRoi()
@@ -762,11 +762,11 @@ void OctreeManager::setEvaluatorStartParams()
   eval_volumeAccuracyFile = std::ofstream("results_volume_accuracy_" + file_index_str + ".csv");
   eval_distanceFile = std::ofstream("results_distances_" + file_index_str + ".csv");
   eval_resultsFile << "Time (s),Plan duration (s),Plan Length,";
-  evaluator->writeHeader(eval_resultsFile) << ",Step,Segment" << std::endl;
+  evaluator->writeHeader(eval_resultsFile) << ",Step,Segment,Trolley Position,Trolley Height" << std::endl;
   eval_resultsFileOld << "Time (s),Plan duration (s),Plan Length,";
-  evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step,Segment" << std::endl;
+  evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step,Segment,Trolley Position,Trolley Height" << std::endl;
   eval_externalClusterFile << "Time (s),Plan duration (s),Plan Length,";
-  external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step,Segment" << std::endl;
+  external_cluster_evaluator->writeHeader(eval_externalClusterFile)<< ",Step,Segment,Trolley Position,Trolley Height" << std::endl;
   eval_plannerStartTime = ros::Time::now();
   eval_passedTime = 0;
   eval_accumulatedPlanDuration = 0;
@@ -786,7 +786,7 @@ std::ostream& writeVector(std::ostream &os, double passed_time, const std::vecto
   return os;
 }
 
-bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration, size_t segment)
+bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration, size_t segment, double trolley_pos, double trolley_height)
 {
   ros::Time currentTime = ros::Time::now();
 
@@ -799,13 +799,13 @@ bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration, 
   rvp_evaluation::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
 
   eval_resultsFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << "," << segment << std::endl;
+  evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << "," << segment << "," << trolley_pos << "," << trolley_height << std::endl;
 
   eval_resultsFileOld << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << "," << segment << std::endl;
+  evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << "," << segment << "," << trolley_pos << "," << trolley_height << std::endl;
 
   eval_externalClusterFile << eval_passedTime << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
-  external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << "," << segment << std::endl;
+  external_cluster_evaluator->writeParams(eval_externalClusterFile, external_cluster_evaluator->getCurrentParams()) << "," << eval_lastStep << "," << segment << "," << trolley_pos << "," << trolley_height << std::endl;
 
   writeVector(eval_fruitCellPercFile, eval_passedTime, res.fruit_cell_percentages) << std::endl;
   writeVector(eval_volumeAccuracyFile, eval_passedTime, res.volume_accuracies) << std::endl;

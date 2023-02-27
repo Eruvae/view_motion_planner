@@ -394,7 +394,9 @@ bool ViewMotionPlanner::buildGraph()
 
 bool ViewMotionPlanner::searchPath()
 {
-  pauseGraphBuilderThreads();
+  if (config.pause_graph_building_on_search)
+    pauseGraphBuilderThreads();
+
   ros::Time start_expand(ros::Time::now());
   bool has_expanded = false;
   while (ros::ok())
@@ -464,7 +466,7 @@ bool ViewMotionPlanner::executePath()
       octree_manager->waitForPointcloudWithRoi();
       if (eval_running)
       {
-        octree_manager->saveEvaluatorData(cost, traj->getDuration(), eval_current_segment);
+        octree_manager->saveEvaluatorData(cost, traj->getDuration(), eval_current_segment, trolley_remote.getPosition(), trolley_remote.getHeight());
       }
       if (!success)
       {
@@ -525,7 +527,10 @@ void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double durati
     }
 
     resumeGraphBuilderThreads();
-    ros::Duration(config.graph_building_time).sleep();
+    if (config.pause_graph_building_on_search)
+    {
+      ros::Duration(config.graph_building_time).sleep();
+    }
   }
   pauseGraphBuilderThreads();
 }
@@ -556,7 +561,10 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
       octree_manager->waitForPointcloudWithRoi();
 
     resumeGraphBuilderThreads();
-    ros::Duration(config.graph_building_time).sleep();
+    if (config.pause_graph_building_on_search)
+    {
+      ros::Duration(config.graph_building_time).sleep();
+    }
   }
   pauseGraphBuilderThreads();
 }
@@ -648,11 +656,11 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
 
   if (config.trolley_num_vertical_segments > 1 && trolley_current_vertical_segment < config.trolley_num_vertical_segments - 1)
   {
-    ROS_INFO_STREAM("Lifting trolley");
-    trolley_remote.liftTo(trolley_remote.getHeight() + config.trolley_lift_dist);
-    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
-    //ros::Duration(5).sleep(); // wait for transform to update
     trolley_current_vertical_segment++;
+    ROS_INFO_STREAM("Lifting trolley");
+    trolley_remote.liftTo(469.0 + trolley_current_vertical_segment * config.trolley_lift_dist);
+    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    ros::Duration(5).sleep(); // wait for transform to update
     if (config.trolley_flip_workspace && trolley_current_flipped)
     {
       flipWsAndSr();
@@ -665,14 +673,14 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
 
   if (config.trolley_num_segments > 1 && trolley_current_segment < config.trolley_num_segments - 1)
   {
+    trolley_current_vertical_segment = 0;
+    trolley_current_segment++;
     ROS_INFO_STREAM("Moving trolley");
-    trolley_remote.moveTo(static_cast<float>(trolley_remote.getPosition() + config.trolley_move_length));
+    trolley_remote.moveTo(static_cast<float>(trolley_current_segment * config.trolley_move_length));
     for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
     trolley_remote.liftTo(469.0);
     for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
     ros::Duration(5).sleep(); // wait for transform to update
-    trolley_current_vertical_segment = 0;
-    trolley_current_segment++;
     if (config.trolley_flip_workspace && trolley_current_flipped)
     {
       flipWsAndSr();
@@ -760,10 +768,10 @@ void ViewMotionPlanner::plannerLoop()
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
         break;
       case Vmp_PLAN_DURATION:
-        pathSearcherThread(EvalEpisodeEndParam::PLAN_DURATION, octree_manager->getEvalAccPlanDuration() + config.trolley_time_per_segment);
+        pathSearcherThread(EvalEpisodeEndParam::PLAN_DURATION, (1 + eval_current_segment) * config.trolley_time_per_segment);
         break;
       case Vmp_PLAN_LENGTH:
-        pathSearcherThread(EvalEpisodeEndParam::PLAN_LENGTH, octree_manager->getEvalAccPlanLength() + config.trolley_time_per_segment);
+        pathSearcherThread(EvalEpisodeEndParam::PLAN_LENGTH,  (1 + eval_current_segment) * config.trolley_time_per_segment);
         break;
       default:
         ROS_ERROR_STREAM("Invalid trolley segment end param: " << config.trolley_segment_end_param);
@@ -776,9 +784,34 @@ void ViewMotionPlanner::plannerLoop()
       robot_manager->moveToHomePose();
       if (!trolleyGoNextSegment()) // end reached, go to idle
       {
-        config.mode = Vmp_IDLE;
-        updateConfig();
-        continue;
+        if (eval_current_episode + 1 >= eval_num_episodes)
+        {
+          config.mode = Vmp_IDLE;
+          updateConfig();
+          continue;
+        }
+        robot_manager->moveToHomePose();
+        trolley_remote.moveTo(0);
+        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        trolley_remote.liftTo(469.0);
+        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        ros::Duration(5).sleep(); // wait for transform to update
+
+        // reset current segments
+        trolley_current_segment = 0;
+        trolley_current_vertical_segment = 0;
+        if (config.trolley_flip_workspace && trolley_current_flipped)
+        {
+          flipWsAndSr();
+          trolley_current_flipped = false;
+        }
+
+        robot_manager->moveToHomePose();
+        octree_manager->resetOctomap();
+        graph_manager->clear();
+        octree_manager->waitForPointcloudWithRoi();
+        octree_manager->resetEvaluator();
+        eval_current_episode++;
       }
       octree_manager->waitForPointcloudWithRoi();
       /*ROS_INFO_STREAM("Moving up");

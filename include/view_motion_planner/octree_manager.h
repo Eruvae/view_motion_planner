@@ -249,7 +249,7 @@ public:
                       bool with_trolley);
 
   void setEvaluatorStartParams();
-  bool saveEvaluatorData(double plan_length, double traj_duration, size_t segment);
+  bool saveEvaluatorData(double plan_length, double traj_duration, size_t segment, double trolley_pos, double trolley_height);
   bool resetEvaluator();
 
   inline bool isViewpointSimilarToPastViewpoints(const std::deque<ViewposePtr>& vp_vec, ViewposePtr curr_vp, size_t num_vp = 500)
