@@ -25,7 +25,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     robot_manager(new RobotManager(nh, tfBuffer, pose_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     octree_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, initialize_evaluator)),
-    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph)),
+    graph_manager(new ViewposeGraphManager(robot_manager, octree_manager, vt_searched_graph, map_frame, ws_frame, pose_frame)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
   workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);

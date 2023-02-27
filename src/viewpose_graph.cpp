@@ -19,13 +19,19 @@ bool VertexUtilityComp::operator() (const Vertex &v1, const Vertex &v2) const
 
 ViewposeGraphManager::ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                                            const std::shared_ptr<OctreeManager> &octree_manager,
-                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph)
+                                           const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
+                                           const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame)
   : robot_manager(robot_manager), octree_manager(octree_manager),
     neighbors_joint(new ompl::NearestNeighborsGNAT<ViewposePtr>()), neighbors_vpsim(new ompl::NearestNeighborsGNAT<ViewposePtr>()),
-    vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this))
+    vt_searched_graph(vt_searched_graph), current_start_vertex_number(0), priorityQueue(VertexUtilityComp(this)),
+    map_frame(map_frame), ws_frame(ws_frame), pose_frame(pose_frame)
 {
   neighbors_joint->setDistanceFunction(std::bind(&ViewposeGraphManager::getVertexDistanceJoints, this, std::placeholders::_1, std::placeholders::_2));
   neighbors_vpsim->setDistanceFunction(std::bind(&ViewposeGraphManager::getVertexDistanceVpSimilarity, this, std::placeholders::_1, std::placeholders::_2));
+
+  ros::NodeHandle nh;
+  viewArrowVisPub = nh.advertise<visualization_msgs::MarkerArray>("roi_vp_marker", 1);
+  poseArrayPub = nh.advertise<geometry_msgs::PoseArray>("vp_array", 1);
 }
 
 double ViewposeGraphManager::getVertexDistancePose(ViewposePtr a, ViewposePtr b)
@@ -122,8 +128,98 @@ size_t ViewposeGraphManager::connectNeighbors(const Vertex &v, size_t num_neighb
   return successful_connections;
 }
 
+void ViewposeGraphManager::publishViewposeVisualizations(const std::vector<ViewposePtr> &vps)
+{
+  static size_t last_marker_count = 0;
+  visualization_msgs::MarkerArray markers;
+  geometry_msgs::PoseArray poseArr;
+  poseArr.header.frame_id = map_frame;
+  poseArr.header.stamp = ros::Time::now();
+  bool first = true;
+  std::string ns = "graphPoses";
+  for (size_t i = 0; i < vps.size(); i++)
+  {
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = map_frame;
+    marker.header.stamp = ros::Time();
+    marker.ns = ns;
+    marker.id = i;
+    marker.type = visualization_msgs::Marker::ARROW;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.position.x = 0;
+    marker.pose.position.y = 0;
+    marker.pose.position.z = 0;
+    marker.pose.orientation.x = 0.0;
+    marker.pose.orientation.y = 0.0;
+    marker.pose.orientation.z = 0.0;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = 0.01;
+    marker.scale.y = 0.02;
+    switch (vps[i]->type)
+    {
+    case TARGET_ROI:
+      marker.color = COLOR_RED;
+      break;
+    case TARGET_OCC:
+      marker.color = COLOR_GREEN;
+      break;
+    case TARGET_BORDER:
+      marker.color = COLOR_BLUE;
+      break;
+    }
+    //marker.lifetime = ros::Duration(2);
+    marker.points.push_back(vps[i]->pose.position);
+    marker.points.push_back(octomap::pointOctomapToMsg(vps[i]->origin));
+    markers.markers.push_back(marker);
+
+    /*visualization_msgs::Marker textMarker;
+    textMarker.header.frame_id = map_frame;
+    textMarker.header.stamp = ros::Time();
+    textMarker.ns = ns + "_texts";
+    textMarker.id = i;
+    textMarker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    textMarker.action = visualization_msgs::Marker::ADD;
+    textMarker.pose.position = viewpoints[i].pose.position;
+    textMarker.pose.orientation.x = 0.0;
+    textMarker.pose.orientation.y = 0.0;
+    textMarker.pose.orientation.z = 0.0;
+    textMarker.pose.orientation.w = 1.0;
+    textMarker.scale.z = 0.05;
+    textMarker.color = color;
+    //textMarker.lifetime = ros::Duration(2);
+    textMarker.text = std::to_string(viewpoints[i].infoGain) + ", " + std::to_string(viewpoints[i].distance) + ", " + std::to_string(viewpoints[i].utility);
+    markers.markers.push_back(textMarker);*/
+
+    poseArr.poses.push_back(vps[i]->pose);
+  }
+  ROS_INFO_STREAM("Last Marker count namespace: " << ns << ": " << last_marker_count << "; current: " << vps.size());
+  for (size_t i = vps.size(); i < last_marker_count; i++)
+  {
+    visualization_msgs::Marker marker;
+    marker.header.frame_id = map_frame;
+    marker.header.stamp = ros::Time();
+    marker.ns = ns;
+    marker.id = i;
+    marker.type = visualization_msgs::Marker::ARROW;
+    marker.action = visualization_msgs::Marker::DELETE;
+    markers.markers.push_back(marker);
+    /*visualization_msgs::Marker textMarker;
+    textMarker.header.frame_id = map_frame;
+    textMarker.header.stamp = ros::Time();
+    textMarker.ns = ns + "_texts";
+    textMarker.id = i;
+    textMarker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+    textMarker.action = visualization_msgs::Marker::DELETE;
+    markers.markers.push_back(textMarker);*/
+  }
+  last_marker_count = vps.size();
+  viewArrowVisPub.publish(markers);
+  poseArrayPub.publish(poseArr);
+}
+
 void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualize_unexpanded)
 {
+  std::vector<ViewposePtr> vps;
   ROS_INFO_STREAM("Visualizing searched graph");
   vt_searched_graph->deleteAllMarkers();
   boost::shared_lock lock(graph_mtx);
@@ -144,6 +240,7 @@ void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualiz
     toVisualizeQueue.pop();
     visualizedSet.insert(v);
     ViewposePtr vp = graph[v];
+    vps.push_back(vp);
     bool on_bu_path = bestUtilityPoses.count(vp) > 0;
     for (auto [ei, ei_end] = boost::out_edges(v, graph); ei != ei_end; ei++)
     {
@@ -186,6 +283,7 @@ void ViewposeGraphManager::visualizeGraph(bool visualize_expanded, bool visualiz
   }
   ROS_INFO_STREAM("Visualization done; " << verts_bu << " bu, " << verts_vis << " vis, " << verts_exp << " exp, " << verts_ue << " ue");
   vt_searched_graph->trigger();
+  publishViewposeVisualizations(vps);
 }
 
 void ViewposeGraphManager::initStartPose(const Vertex &v)
