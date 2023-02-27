@@ -800,6 +800,7 @@ void ViewMotionPlanner::plannerLoop()
         // reset current segments
         trolley_current_segment = 0;
         trolley_current_vertical_segment = 0;
+        eval_current_segment = 0;
         if (config.trolley_flip_workspace && trolley_current_flipped)
         {
           flipWsAndSr();
