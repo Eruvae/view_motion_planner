@@ -56,8 +56,7 @@ bool OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborC
   {
     //octomap::OcTreeKey neighbour_key(point.x + octomap_vpp::nbLut[i][0], point.y + octomap_vpp::nbLut[i][1], point.z + octomap_vpp::nbLut[i][2]);
     //set.insert(toMappingKey(neighbour_key));
-    MappingKey neighbour_key(point.x + octomap_vpp::nbLut[i][0], point.y + octomap_vpp::nbLut[i][1], point.z + octomap_vpp::nbLut[i][2]);
-    set.insert(neighbour_key);
+    set.insert(MappingKey(point.x + octomap_vpp::nbLut[i][0], point.y + octomap_vpp::nbLut[i][1], point.z + octomap_vpp::nbLut[i][2]));
   }
   return true;
 }
