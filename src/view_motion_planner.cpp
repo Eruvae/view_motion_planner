@@ -659,7 +659,7 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
     trolley_current_vertical_segment++;
     ROS_INFO_STREAM("Lifting trolley");
     trolley_remote.liftTo(469.0 + trolley_current_vertical_segment * config.trolley_lift_dist);
-    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    trolley_remote.waitForReady();
     ros::Duration(5).sleep(); // wait for transform to update
     if (config.trolley_flip_workspace && trolley_current_flipped)
     {
@@ -677,9 +677,9 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
     trolley_current_segment++;
     ROS_INFO_STREAM("Moving trolley");
     trolley_remote.moveTo(static_cast<float>(trolley_current_segment * config.trolley_move_length));
-    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    trolley_remote.waitForReady();
     trolley_remote.liftTo(469.0);
-    for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+    trolley_remote.waitForReady();
     ros::Duration(5).sleep(); // wait for transform to update
     if (config.trolley_flip_workspace && trolley_current_flipped)
     {
@@ -792,9 +792,9 @@ void ViewMotionPlanner::plannerLoop()
         }
         robot_manager->moveToHomePose();
         trolley_remote.moveTo(0);
-        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        trolley_remote.waitForReady();
         trolley_remote.liftTo(469.0);
-        for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+        trolley_remote.waitForReady();
         ros::Duration(5).sleep(); // wait for transform to update
 
         // reset current segments
@@ -822,7 +822,7 @@ void ViewMotionPlanner::plannerLoop()
       static double sign = 1;
       trolley_remote.liftTo(sign * LIFT);
       ROS_INFO_STREAM("Lifting trolley");
-      for (ros::Rate waitTrolley(10); ros::ok() && !trolley_remote.isReady(); waitTrolley.sleep());
+      trolley_remote.waitForReady();
       ROS_INFO_STREAM("Trolley Ready");
       config.mode = Vmp_IDLE;
       sign *= -1;
