@@ -55,11 +55,29 @@ static inline bool isInWorkspace(const octomap::point3d &p)
           p.z() >= config.ws_min_z && p.z() <= config.ws_max_z);
 }
 
+static inline bool isInSamplingRegion(const octomap::point3d &p, octomap::point3d sr_min, octomap::point3d sr_max)
+{
+  return (p.x() >= sr_min.x() && p.x() <= sr_max.x() &&
+          p.y() >= sr_min.y() && p.y() <= sr_max.y() &&
+          p.z() >= sr_min.z() && p.z() <= sr_max.z());
+}
+
 static inline bool isInSamplingRegion(const octomap::point3d &p)
 {
   return (p.x() >= config.sr_min_x && p.x() <= config.sr_max_x &&
           p.y() >= config.sr_min_y && p.y() <= config.sr_max_y &&
           p.z() >= config.sr_min_z && p.z() <= config.sr_max_z);
+}
+
+
+static inline bool getRandomTarget(const std::vector<octomap::point3d>& all_targets, octomap::point3d &out_target)
+{
+  if (all_targets.empty())
+    return false;
+
+  std::uniform_int_distribution<size_t> distribution(0, all_targets.size() - 1);
+  out_target = all_targets[distribution(global_random_engine)];
+  return true;
 }
 
 
