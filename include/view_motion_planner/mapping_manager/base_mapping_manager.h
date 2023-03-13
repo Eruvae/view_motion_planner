@@ -21,6 +21,10 @@ enum NeighborConnectivity
   kTwentySix = 26
 };
 
+typedef std::vector<octomap::point3d> TargetV;
+typedef std::shared_ptr<TargetV> TargetVPtr;
+typedef std::shared_ptr<const TargetV> TargetVConstPtr;
+
 class BaseMappingManager {
 public:
 //////////////////////////////////////// MAP ACCESS/MODIFICATION //////////////////////////////////////////////
@@ -57,6 +61,26 @@ public:
   /// @param pc_transform If the transformation is not identity, then this transform is applied to the pointcloud before registering to the map.
   /// @return True, on success. False, on failure (e.g. pointcloud is outside of the map, no points given, tf error, etc.)
   virtual bool registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform) = 0;
+
+  /// @brief Updates roi, expl, and border targets. These targets can be get via getRoiTargets(), getExplTargets(), and getBorderTargets()
+  /// @param sr_min Sampling region min
+  /// @param sr_max Sampling region max
+  /// @param can_skip_roi roi targets may not be updated if can_skip_roi is set to true.
+  /// @param can_skip_expl expl targets may not be updated if can_skip_expl is set to true.
+  /// @param can_skip_border border targets may not be updated if can_skip_border is set to true.
+  virtual void updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, bool can_skip_roi = false, bool can_skip_expl = false, bool can_skip_border = false, NeighborConnectivity neighbor_con = kEighteen) = 0;
+
+  /// @brief Returns ROI targets. ROI targets are the unknown cells which are neighbor to a free and a ROI cell.
+  /// @return Returns last computed ROI targets. Call updateTargets() beforehand to get the latest state.
+  virtual TargetVConstPtr getRoiTargets() = 0;
+
+  /// @brief Returns Expl targets. Expl targets are the free cells wich are neighbor to a unknown and an occupied cell.
+  /// @return Returns last computed Expl targets. Call updateTargets() beforehand to get the latest state.
+  virtual TargetVConstPtr getExplTargets() = 0;
+
+  /// @brief Returns Border targets. Border targets are the free cells wich are neighbor to a unknown and a not occupied (free or unknown) cell.
+  /// @return Returns last computed Border targets. Call updateTargets() beforehand to get the latest state.
+  virtual TargetVConstPtr getBorderTargets() = 0;
 
 //////////////////////////////////////// IO //////////////////////////////////////////////
 

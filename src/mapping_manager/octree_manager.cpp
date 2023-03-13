@@ -122,6 +122,100 @@ bool OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
 }
 
 
+void 
+OctreeManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, bool can_skip_roi, bool can_skip_expl, bool can_skip_border, NeighborConnectivity neighbor_con)
+{
+  std::scoped_lock lock(tree_mtx, targets_mtx); // more robust to deadlocks
+
+    for (unsigned int i = 0; i < 3; i++)
+    {
+      if (sr_min(i) > sr_max(i))
+        std::swap(sr_min(i), sr_max(i));
+    }
+
+  if (!can_skip_roi)
+  {
+    TargetVPtr new_roi_targets = std::make_shared<TargetV>();
+    //new_roi_targets->reserve(size_t(roi_targets->size() * 1.1)); // TODO: Enable for more performance
+    
+    octomap::KeySet roi = planning_tree->getRoiKeys();
+    octomap::KeySet freeNeighbours;
+    for (const octomap::OcTreeKey &key : roi)
+    {
+      if (!isInSamplingRegion(planning_tree->keyToCoord(key), sr_min, sr_max)) // ROI not in sampling region
+        continue;
+
+      planning_tree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, (octomap_vpp::Neighborhood)neighbor_con );
+    }
+    for (const octomap::OcTreeKey &key : freeNeighbours)
+    {
+      if (planning_tree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, (octomap_vpp::Neighborhood)neighbor_con ))
+      {
+        new_roi_targets->push_back(planning_tree->keyToCoord(key));
+      }
+    }
+
+    roi_targets = new_roi_targets;
+  }
+
+  if (!can_skip_expl || !can_skip_border)
+  {
+    TargetVPtr new_expl_targets = std::make_shared<TargetV>();
+    //new_expl_targets->reserve(size_t(expl_targets->size() * 1.1)); // TODO: Enable for more performance
+    TargetVPtr new_border_targets = std::make_shared<TargetV>();
+    //new_border_targets->reserve(size_t(border_targets->size() * 1.1)); // TODO: Enable for more performance
+
+    for (auto it = planning_tree->begin_leafs_bbx(sr_min, sr_max), end = planning_tree->end_leafs_bbx(); it != end; it++)
+    {
+      if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
+      {
+        if (planning_tree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
+        {
+          if (planning_tree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
+            new_expl_targets->push_back(it.getCoordinate());
+          else
+            new_border_targets->push_back(it.getCoordinate());
+        }
+      }
+    }
+
+    expl_targets = new_expl_targets;
+    border_targets = new_border_targets;
+  }
+
+}
+
+
+TargetVConstPtr 
+OctreeManager::getRoiTargets()
+{
+  targets_mtx.lock();
+  TargetVConstPtr tmp = roi_targets;
+  targets_mtx.unlock();
+  return tmp;
+}
+
+
+TargetVConstPtr 
+OctreeManager::getExplTargets()
+{
+  targets_mtx.lock();
+  TargetVConstPtr tmp = expl_targets;
+  targets_mtx.unlock();
+  return tmp;
+}
+
+
+TargetVConstPtr
+OctreeManager::getBorderTargets()
+{
+  targets_mtx.lock();
+  TargetVConstPtr tmp = border_targets;
+  targets_mtx.unlock();
+  return tmp;
+}
+
+
 bool OctreeManager::saveToFile(const std::string &filename, bool overwrite)
 {
   if (!overwrite)
