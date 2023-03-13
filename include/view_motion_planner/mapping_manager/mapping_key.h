@@ -38,15 +38,15 @@ struct MappingKey
 };
 
 typedef std::shared_ptr<MappingKey> MappingKeyPtr;
-typedef std::shared_ptr<const MappingKey> MappingKeyConstPtr;
+typedef std::shared_ptr<MappingKey const> MappingKeyConstPtr;
 
 typedef std::unordered_set<MappingKey, MappingKey::KeyHash> MappingKeySet; // Uses memory address for hashing, uses operator== for comparing items
 typedef std::shared_ptr<MappingKeySet> MappingKeySetPtr;
-typedef std::shared_ptr<const MappingKeySet> MappingKeySetConstPtr;
+typedef std::shared_ptr<MappingKeySet const> MappingKeySetConstPtr;
 
 typedef std::vector<MappingKey> MappingKeyRay;
 typedef std::shared_ptr<MappingKeyRay> MappingKeyRayPtr;
-typedef std::shared_ptr<const MappingKeyRay> MappingKeyRayConstPtr;
+typedef std::shared_ptr<MappingKeyRay const> MappingKeyRayConstPtr;
 
 
 } // namespace view_motion_planner
