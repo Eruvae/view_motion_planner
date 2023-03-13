@@ -17,7 +17,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, cons
 }
 
 
-void OctreeManager::resetMap()
+void 
+OctreeManager::resetMap()
 {
   planning_tree->clear();
   planning_tree->clearRoiKeys();
@@ -25,14 +26,16 @@ void OctreeManager::resetMap()
 }
 
 
-MappingKey OctreeManager::coordToKey(const octomap::point3d &coord)
+MappingKey 
+OctreeManager::coordToKey(const octomap::point3d &coord)
 {
   octomap::OcTreeKey key = planning_tree->coordToKey(coord);
   return toMappingKey(key);
 }
 
 
-bool OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, MappingKeyRay& ray)
+bool 
+OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, MappingKeyRay& ray)
 {
   tree_mtx.lock();
   octomap::KeyRay octomap_ray;
@@ -49,7 +52,8 @@ bool OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap
 }
 
 
-bool OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
+bool 
+OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
 {
   // TODO: add key limit checking?
   for (int i = 0; i < (int)connectivity; i++)
@@ -62,7 +66,8 @@ bool OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborC
 }
 
 
-MappingNode OctreeManager::search(const MappingKey& key)
+MappingNode 
+OctreeManager::search(const MappingKey& key)
 {
   tree_mtx.lock();
   octomap::OcTreeKey key_ = toOcTreeKey(key);
@@ -80,11 +85,11 @@ MappingNode OctreeManager::search(const MappingKey& key)
   node.occ_p = node_->getOccupancy();
   node.roi_p = node_->getRoiProb();
 
-  if (node.occ_p < 0.5)
+  if (node.occ_p < 0.5) // TODO: hardcoded
   {
     node.state = FREE;
   }
-  else if (node.roi_p < 0.5)
+  else if (node.roi_p < 0.5) // TODO: hardcoded
   {
     node.state = NON_ROI;
   }
@@ -98,7 +103,8 @@ MappingNode OctreeManager::search(const MappingKey& key)
 }
 
 
-bool OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
+bool 
+OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
 {
   Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
   Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
@@ -111,12 +117,11 @@ bool OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcl
     octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
 
   tree_mtx.lock();
-  ros::Time insertStartTime(ros::Time::now());
+  ros::Time insert_time_start(ros::Time::now());
   const octomap::point3d scan_orig(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
   planning_tree->insertPointCloud(fullCloud, scan_orig);
   planning_tree->insertRegionScan(inlierCloud, outlierCloud);
-  ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insertStartTime) << " s");
-  ros::Time updateTargetStartTime(ros::Time::now());
+  ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tree_mtx.unlock();
   return true;
 }
@@ -154,7 +159,7 @@ OctreeManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, b
         new_roi_targets->push_back(planning_tree->keyToCoord(key));
       }
     }
-
+    // update roi targets
     roi_targets = new_roi_targets;
   }
 
@@ -178,7 +183,7 @@ OctreeManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, b
         }
       }
     }
-
+    // update expl and border targets
     expl_targets = new_expl_targets;
     border_targets = new_border_targets;
   }
@@ -216,7 +221,8 @@ OctreeManager::getBorderTargets()
 }
 
 
-bool OctreeManager::saveToFile(const std::string &filename, bool overwrite)
+bool 
+OctreeManager::saveToFile(const std::string &filename, bool overwrite)
 {
   if (!overwrite)
   {
@@ -234,7 +240,8 @@ bool OctreeManager::saveToFile(const std::string &filename, bool overwrite)
   return result;
 }
 
-int OctreeManager::loadFromFile(const std::string &filename, const geometry_msgs::Transform &offset)
+int 
+OctreeManager::loadFromFile(const std::string &filename, const geometry_msgs::Transform &offset)
 {
   Eigen::Translation3d translation_(offset.translation.x, offset.translation.y, offset.translation.z);
   Eigen::Quaterniond rotation_(offset.rotation.w, offset.rotation.x, offset.rotation.y, offset.rotation.z);
@@ -266,7 +273,8 @@ int OctreeManager::loadFromFile(const std::string &filename, const geometry_msgs
 }
 
 
-void OctreeManager::publishMap()
+void 
+OctreeManager::publishMap()
 {
   if (octomap_pub.getNumSubscribers() <= 0) return; // skip if no one subscribed...
 

@@ -106,9 +106,9 @@ static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0
 static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
 
 static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std::vector<octomap::point3d> &roi_targets, 
-                                                        const std::vector<octomap::point3d> &expl_targets, 
-                                                        const std::vector<octomap::point3d> &border_targets, 
-                                                        std::string map_frame)
+                                                                      const std::vector<octomap::point3d> &expl_targets, 
+                                                                      const std::vector<octomap::point3d> &border_targets, 
+                                                                      const std::string& map_frame)
 {
   const size_t NUM_P = roi_targets.size() + expl_targets.size() + border_targets.size();
 
@@ -157,6 +157,7 @@ static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std:
 ////////////////////// OTHER UTILITIES /////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////
 
+// TODO!
 template<typename RandomEngine>
 static inline octomap::point3d sampleRandomWorkspacePoint(RandomEngine &engine)
 {
