@@ -779,7 +779,6 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
 
     //need_to_publish_map = need_to_publish_map || result;
   }
-  //
 }
 
 void ViewMotionPlanner::publishMapThread()
