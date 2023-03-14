@@ -27,12 +27,12 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     vt_searched_graph(new rviz_visual_tools::RvizVisualTools(map_frame, "vm_searched_graph")),
     robot_manager(new RobotManager(nh, tfBuffer, map_frame, robot_description_param_name, group_name, ee_link_name)),
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
-    graph_manager(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph)),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
   //mapping_manager(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, evaluation_mode)),7
   mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
 
+  graph_manager.reset(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph));
 
   workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);
   samplingRegionPub = nh.advertise<visualization_msgs::Marker>("samplingRegion", 1, true);
