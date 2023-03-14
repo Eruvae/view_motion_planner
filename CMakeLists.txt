@@ -37,6 +37,7 @@ set (CATKIN_DEPENDENCIES
     voxblox_ros
     voxblox_msgs
     rviz_visual_tools
+    pcl_conversions
 )
 
 ## Find catkin macros and libraries

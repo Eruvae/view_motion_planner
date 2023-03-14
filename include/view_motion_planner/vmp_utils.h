@@ -13,6 +13,7 @@
 #include <octomap_vpp/RoiOcTree.h>
 #include <Eigen/Dense>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <pcl_conversions/pcl_conversions.h>
 
 namespace view_motion_planner
 {
@@ -101,56 +102,93 @@ static inline Eigen::Vector3d toEigen(const octomap::point3d &point)
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 // lambda initialization trick
-static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
-static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
-static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
+// static const std_msgs::ColorRGBA COLOR_RED = []{std_msgs::ColorRGBA c; c.r = 1.f; c.g = 0.f; c.b = 0.f; c.a = 1.f; return c; } ();
+// static const std_msgs::ColorRGBA COLOR_GREEN = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 1.f; c.b = 0.f; c.a = 1.f; return c; } ();
+// static const std_msgs::ColorRGBA COLOR_BLUE = []{std_msgs::ColorRGBA c; c.r = 0.f; c.g = 0.f; c.b = 1.f; c.a = 1.f; return c; } ();
 
-static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std::vector<octomap::point3d> &roi_targets, 
-                                                                      const std::vector<octomap::point3d> &expl_targets, 
-                                                                      const std::vector<octomap::point3d> &border_targets, 
-                                                                      const std::string& map_frame)
+// TODO: Not using. Markers are slow and difficult to manage on RViz.
+// static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std::vector<octomap::point3d> &roi_targets, 
+//                                                                       const std::vector<octomap::point3d> &expl_targets, 
+//                                                                       const std::vector<octomap::point3d> &border_targets, 
+//                                                                       const std::string& map_frame)
+// {
+//   const size_t NUM_P = roi_targets.size() + expl_targets.size() + border_targets.size();
+
+//   visualization_msgs::Marker m;
+//   m.header.frame_id = map_frame;
+//   m.header.stamp = ros::Time();
+//   m.ns = "targets";
+//   m.id = 0;
+//   m.type = visualization_msgs::Marker::POINTS;
+//   m.action = visualization_msgs::Marker::ADD;
+//   m.pose.orientation.w = 1.0;
+//   m.scale.x = 0.005;
+//   m.scale.y = 0.005;
+//   m.color.a = 1.0;
+
+//   if (NUM_P == 0)
+//   {
+//     ROS_WARN("No targets. Returning an empty visualization msg!");
+//     return m;
+//   }
+
+//   m.points.reserve(NUM_P);
+//   m.colors.reserve(NUM_P);
+
+//   for (const octomap::point3d &p : roi_targets)
+//   {
+//     m.points.push_back(octomap::pointOctomapToMsg(p));
+//     m.colors.push_back(COLOR_RED);
+//   }
+//   for (const octomap::point3d &p : expl_targets)
+//   {
+//     m.points.push_back(octomap::pointOctomapToMsg(p));
+//     m.colors.push_back(COLOR_GREEN);
+//   }
+//   for (const octomap::point3d &p : border_targets)
+//   {
+//     m.points.push_back(octomap::pointOctomapToMsg(p));
+//     m.colors.push_back(COLOR_BLUE);
+//   }
+
+//   return m;
+// }
+
+// PointT can be pcl::PointXYZ or pcl::PointXYZRGB. Set r,g,b values if using pcl::PointXYZRGB
+template <typename PointT>
+static inline sensor_msgs::PointCloud2Ptr targetsToPointCloud2Msg(const std::vector<octomap::point3d> &targets,
+                                                                  const std::string& map_frame,
+                                                                  uint8_t r = 0, uint8_t g = 0, uint8_t b = 0)
 {
-  const size_t NUM_P = roi_targets.size() + expl_targets.size() + border_targets.size();
+  pcl::PointCloud<PointT> cloud;
 
-  visualization_msgs::Marker m;
-  m.header.frame_id = map_frame;
-  m.header.stamp = ros::Time();
-  m.ns = "targets";
-  m.id = 0;
-  m.type = visualization_msgs::Marker::POINTS;
-  m.action = visualization_msgs::Marker::ADD;
-  m.pose.orientation.w = 1.0;
-  m.scale.x = 0.005;
-  m.scale.y = 0.005;
-  m.color.a = 1.0;
+  cloud.points.reserve(targets.size());
+  for (int i = 0; i < targets.size(); ++i) {
+    PointT pt;
 
-  if (NUM_P == 0)
-  {
-    ROS_WARN("No targets. Returning an empty visualization msg!");
-    return m;
+    // An evil hack to check if PointT is PointXYZ or PointXYZRGB
+    if (pcl::traits::has_color<PointT>())
+    {
+      pt = PointT(r,g,b);
+    }
+
+    pt.x = targets[i].x();
+    pt.y = targets[i].y();
+    pt.z = targets[i].z();
+    cloud.points.push_back(pt);
   }
 
-  m.points.reserve(NUM_P);
-  m.colors.reserve(NUM_P);
-
-  for (const octomap::point3d &p : roi_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_RED);
-  }
-  for (const octomap::point3d &p : expl_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_GREEN);
-  }
-  for (const octomap::point3d &p : border_targets)
-  {
-    m.points.push_back(octomap::pointOctomapToMsg(p));
-    m.colors.push_back(COLOR_BLUE);
-  }
-
-  return m;
+  sensor_msgs::PointCloud2Ptr cloud2(new sensor_msgs::PointCloud2());
+  pcl::toROSMsg(cloud, *cloud2);
+  cloud2->header.frame_id = map_frame;
+  cloud2->header.stamp = ros::Time::now(); // TODO: ?
+  return cloud2;
 }
+
+
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////

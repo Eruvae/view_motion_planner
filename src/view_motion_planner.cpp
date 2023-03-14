@@ -34,6 +34,12 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
 
   graph_manager.reset(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph));
 
+  // visualization topics
+  roi_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_roi", 1, true);
+  expl_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_expl", 1, true);
+  border_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_border", 1, true);
+
+  // TODO
   workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);
   samplingRegionPub = nh.advertise<visualization_msgs::Marker>("samplingRegion", 1, true);
   config_server.setCallback(boost::bind(&ViewMotionPlanner::reconfigureCallback, this, boost::placeholders::_1, boost::placeholders::_2));
@@ -747,6 +753,30 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
     octomap::point3d sr_max_map = transform(sr_max_ws, ws_frame, map_frame, tfBuffer);
 
     mapping_manager->updateTargets(sr_min_map, sr_max_map);
+
+    // Publish targets
+    if (roi_targets_pub.getNumSubscribers() > 0)
+    {
+      auto roi_targets = mapping_manager->getRoiTargets();
+      auto roi_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*roi_targets, map_frame);
+      //auto roi_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*roi_targets, map_frame, 255, 0 , 0); // RED
+      roi_targets_pub.publish(roi_targets_msg);
+    }
+    if (expl_targets_pub.getNumSubscribers() > 0)
+    {
+      auto expl_targets = mapping_manager->getExplTargets();
+      auto expl_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*expl_targets, map_frame);
+      //auto expl_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*expl_targets, map_frame, 0, 255 , 0); // GREEN
+      expl_targets_pub.publish(expl_targets_msg);
+    }
+    if (border_targets_pub.getNumSubscribers() > 0)
+    {
+      auto border_targets = mapping_manager->getBorderTargets();
+      auto border_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*border_targets, map_frame);
+      //auto border_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*border_targets, map_frame, 0, 0, 255); // BLUE
+      border_targets_pub.publish(border_targets_msg);
+    }
+
     //need_to_publish_map = need_to_publish_map || result;
   }
   //

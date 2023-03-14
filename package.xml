@@ -75,6 +75,7 @@
   <depend>voxblox_ros</depend>
   <depend>voxblox_msgs</depend>
   <depend>rviz_visual_tools</depend>
+  <depend>pcl_conversions</depend>
 
   <!--depend>moveit_setup_assistant</depend-->
   <depend version_gt="0.3.1">srdfdom</depend>
