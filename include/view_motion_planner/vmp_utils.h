@@ -158,15 +158,24 @@ static inline visualization_msgs::Marker targetsToROSVisualizationMsg(const std:
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 // TODO!
-template<typename RandomEngine>
-static inline octomap::point3d sampleRandomWorkspacePoint(RandomEngine &engine)
+// template<typename RandomEngine>
+// static inline octomap::point3d sampleRandomWorkspacePoint(RandomEngine &engine)
+// {
+//   std::uniform_real_distribution<float> x_dist(config.ws_min_x, config.ws_max_x);
+//   std::uniform_real_distribution<float> y_dist(config.ws_min_y, config.ws_max_y);
+//   std::uniform_real_distribution<float> z_dist(config.ws_min_z, config.ws_max_z);
+//   octomap::point3d target(x_dist(engine), y_dist(engine), z_dist(engine));
+//   return target;
+// }
+static inline octomap::point3d sampleRandomWorkspacePoint()
 {
   std::uniform_real_distribution<float> x_dist(config.ws_min_x, config.ws_max_x);
   std::uniform_real_distribution<float> y_dist(config.ws_min_y, config.ws_max_y);
   std::uniform_real_distribution<float> z_dist(config.ws_min_z, config.ws_max_z);
-  octomap::point3d target(x_dist(engine), y_dist(engine), z_dist(engine));
+  octomap::point3d target(x_dist(global_random_engine), y_dist(global_random_engine), z_dist(global_random_engine));
   return target;
 }
+
 
 /*
  * Adapted from: https://stackoverflow.com/a/26127012

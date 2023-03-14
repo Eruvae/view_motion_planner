@@ -8,7 +8,8 @@
 #include <octomap/octomap_types.h>
 
 #include "view_motion_planner/mapping_manager/mapping_key.h"
-#include "vmp_utils.h"
+#include "view_motion_planner/vmp_utils.h"
+#include "view_motion_planner/robot_manager.h"
 
 namespace view_motion_planner
 {
@@ -136,6 +137,116 @@ static inline robot_trajectory::RobotTrajectoryPtr getTrajectoryForState(Traject
   if (v->state == t->traj_start_state) return t->traj;
   if (v->state == t->bw_traj_start_state) return t->bw_traj;
   return nullptr;
+}
+
+static inline ViewposePtr sampleRandomViewPose(TargetType type, 
+                                               std::shared_ptr<BaseMappingManager> mapping_manager,
+                                               const std::string& map_frame, 
+                                               const std::string& ws_frame, 
+                                               tf2_ros::Buffer& tfBuffer,
+                                               std::shared_ptr<RobotManager>& robot_manager)
+{
+  octomap::point3d origin;
+  bool sample_target_success = false;
+  if (type == TARGET_ROI)
+  {
+    auto roi_targets = mapping_manager->getRoiTargets();
+    sample_target_success = getRandomTarget(*roi_targets, origin);
+    if (!sample_target_success)
+      type = TARGET_OCC;
+  }
+  if (type == TARGET_OCC)
+  {
+    auto expl_targets = mapping_manager->getExplTargets();
+    sample_target_success = getRandomTarget(*expl_targets, origin);
+    if (!sample_target_success)
+      type = TARGET_BORDER;
+  }
+  if (type == TARGET_BORDER)
+  {
+    auto border_targets = mapping_manager->getBorderTargets();
+    sample_target_success = getRandomTarget(*border_targets, origin);
+  }
+  if (!sample_target_success)
+  {
+    return nullptr;
+  }
+
+  octomap::point3d end;
+  if (config.vp_select_type == Vmp_RANGE)
+  {
+    bool found_vp = false;
+    for (size_t i=0; i < 100; i++) 
+    {
+      end = sampleRandomViewpoint(origin, config.sensor_min_range, config.sensor_max_range, global_random_engine); // TODO: using global random engine
+      if (isInWorkspace(transform(end, map_frame, ws_frame, tfBuffer))) // Point in workspace region
+      {
+        found_vp = true;
+        break;
+      }
+    }
+    if (!found_vp)
+    {
+      return nullptr;
+    }
+  }
+  else
+  {
+    bool found_vp = false;
+    for (size_t i=0; i < 100; i++)
+    {
+      octomap::point3d end_ws = sampleRandomWorkspacePoint(); // uses min/max coordinates of workspace
+      end = transform(end_ws, ws_frame, map_frame, tfBuffer);
+      if (config.vp_select_type == Vmp_WORKSPACE_RANGE)
+      {
+        double dist = end.distance(origin);
+        if (dist < config.sensor_min_range || dist > config.sensor_max_range)
+          continue;
+      }
+      //if (isInWorkspace(end_ws)) // Point in workspace region
+      //{
+      found_vp = true;
+      break;
+      //}
+    }
+    if (!found_vp)
+    {
+      return nullptr;
+    }
+  }
+
+  MappingKeyRay ray;
+  mapping_manager->computeRayKeys(origin, end, ray);
+
+  auto rayIt = ray.begin();
+  for (auto rayEnd = ray.end(); rayIt != rayEnd; rayIt++)
+  {
+    MappingNode node = mapping_manager->search(*rayIt);
+    if (node.isValid() && node.occ_p > 0.5) // TODO: hardcoded
+    {
+      return nullptr;
+    } 
+  }
+
+  ViewposePtr vp(new Viewpose());
+  vp->pose.position = octomap::pointOctomapToMsg(end);
+  vp->pose.orientation = tf2::toMsg(getQuatInDir((origin - end).normalize()));
+  vp->origin = origin; 
+  vp->dir_vec = (end - origin).normalize();
+
+  /*if(vp->isSimilarToPastViewpoints(past_viewposes_))  // old: isViewpointSimilarToPastViewpoints(past_viewposes_, vp)
+  {
+    return nullptr;
+  }*/
+
+  vp->state = robot_manager->getPoseRobotState(transform(vp->pose, map_frame, ws_frame, tfBuffer));
+  vp->type = type;
+
+  if (vp->state == nullptr)
+  {
+    return nullptr;
+  }
+  return vp;
 }
 
 } // namespace view_motion_planner

@@ -339,9 +339,9 @@ void ViewMotionPlanner::graphBuilderThread()
     else
       type = TARGET_BORDER;
 
-    ROS_FATAL("ViewposePtr vp = sampleRandomViewPose(type); !!!!!!");
+    //ROS_FATAL("ViewposePtr vp = sampleRandomViewPose(type); !!!!!!");
     //ViewposePtr vp = sampleRandomViewPose(type);
-    ViewposePtr vp = nullptr;
+    ViewposePtr vp = sampleRandomViewPose(type, mapping_manager, map_frame, ws_frame, tfBuffer, robot_manager);
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
@@ -738,7 +738,18 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
   }
   
   bool result = mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
-  //need_to_publish_map = need_to_publish_map || result;
+  if (result)
+  {
+    octomap::point3d sr_min_ws(config.sr_min_x, config.sr_min_y, config.sr_min_z);
+    octomap::point3d sr_max_ws(config.sr_max_x, config.sr_max_y, config.sr_max_z);
+
+    octomap::point3d sr_min_map = transform(sr_min_ws, ws_frame, map_frame, tfBuffer);
+    octomap::point3d sr_max_map = transform(sr_max_ws, ws_frame, map_frame, tfBuffer);
+
+    mapping_manager->updateTargets(sr_min_map, sr_max_map);
+    //need_to_publish_map = need_to_publish_map || result;
+  }
+  //
 }
 
 void ViewMotionPlanner::publishMapThread()
