@@ -13,7 +13,7 @@ namespace view_motion_planner
 OctreeManager::OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution)
 {
   planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
-  octomap_pub = priv_nh.advertise<octomap_msgs::Octomap>("octomap", 1);
+  octomap_pub = priv_nh.advertise<octomap_msgs::Octomap>("vis_octomap", 1);
 }
 
 
@@ -37,10 +37,10 @@ OctreeManager::coordToKey(const octomap::point3d &coord)
 bool 
 OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, MappingKeyRay& ray)
 {
-  tree_mtx.lock();
+  //tree_mtx.lock();
   octomap::KeyRay octomap_ray;
   bool ret = planning_tree->computeRayKeys(origin, end, octomap_ray);
-  tree_mtx.unlock();
+  //tree_mtx.unlock();
 
   if (!ret) return false;
 
@@ -132,11 +132,11 @@ OctreeManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, b
 {
   std::scoped_lock lock(tree_mtx, targets_mtx); // more robust to deadlocks
 
-    for (unsigned int i = 0; i < 3; i++)
-    {
-      if (sr_min(i) > sr_max(i))
-        std::swap(sr_min(i), sr_max(i));
-    }
+  for (unsigned int i = 0; i < 3; i++)
+  {
+    if (sr_min(i) > sr_max(i))
+      std::swap(sr_min(i), sr_max(i));
+  }
 
   if (!can_skip_roi)
   {

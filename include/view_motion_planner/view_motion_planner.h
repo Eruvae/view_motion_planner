@@ -13,8 +13,10 @@
 #include "view_motion_planner/robot_manager.h"
 #include "view_motion_planner/viewpose_graph.h"
 #include "view_motion_planner/trolley_remote.h"
-#include "view_motion_planner/mapping_manager/octree_manager.h"
 #include "view_motion_planner/vmp_utils.h"
+
+#include "view_motion_planner/mapping_manager/octree_manager.h"
+#include "view_motion_planner/mapping_manager/voxblox_manager.h"
 
 namespace view_motion_planner
 {
