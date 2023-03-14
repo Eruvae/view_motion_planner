@@ -80,7 +80,7 @@ public:
   double getVertexDistanceVpSimilarity(ViewposePtr a, ViewposePtr b);
 
   double getNearestVertexDistanceByVpSimilarity(const ViewposePtr &vp);
-
+  
   boost::shared_mutex &getGraphMutex()
   {
     return graph_mtx;

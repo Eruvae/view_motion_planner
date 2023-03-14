@@ -317,11 +317,36 @@ static inline octomap::point3d_collection computeVpRaycastEndpoints(const octoma
 // TODO
 static inline void computePoseObservedCells(std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells)
 {
+  if (mapping_manager == nullptr)
+  {
+    ROS_FATAL("computePoseObservedCells: mapping_manager is nullptr!");
+    return;
+  }
+
   octomap::point3d_collection endpoints = computeVpRaycastEndpoints(pose);
   for (const octomap::point3d &end : endpoints)
   {
-    ROS_FATAL("not implemented!");
-    //mapping_manager->computeRayCells(pose.trans(), end, freeCells, occCells, unkCells);
+    MappingKeyRay ray;
+    mapping_manager->computeRayKeys(pose.trans(), end, ray);
+
+    for (const MappingKey& key: ray)
+    {
+      MappingNode node = mapping_manager->search(key);
+      if (!node.isValid()) continue;
+
+      if (node.state == MappingNodeState::UNKNOWN)
+      {
+        unkCells.insert(key);
+      }
+      else if (node.state == MappingNodeState::FREE)
+      {
+        freeCells.insert(key);
+      }
+      else if (node.state == MappingNodeState::NON_ROI || node.state == MappingNodeState::ROI)
+      {
+        occCells.insert(key);
+      }
+    }
   }
 }
 
