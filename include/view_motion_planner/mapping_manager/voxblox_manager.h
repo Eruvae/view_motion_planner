@@ -9,7 +9,6 @@
 #include <mutex>
 #include <voxblox_msgs/Mesh.h>
 #include <voxblox/utils/neighbor_tools.h>
-#include <voxblox/integrator/integrator_utils.h>
 
 namespace view_motion_planner
 {

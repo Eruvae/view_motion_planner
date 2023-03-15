@@ -5,6 +5,8 @@
 //#include <octomap_msgs/Octomap.h>
 //#include <octomap_msgs/conversions.h>
 #include <filesystem>
+#include <voxblox/integrator/integrator_utils.h>
+#include <voxblox_ros/mesh_vis.h>
 
 namespace view_motion_planner
 {
@@ -12,6 +14,12 @@ namespace view_motion_planner
 
 VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution), inv_resolution(1.0/resolution)
 {
+  voxblox::TsdfMap::Config tsdf_config;
+  voxblox::MeshIntegratorConfig mesh_config;
+
+  tsdf_map_.reset(new TsdfMap(config));
+  mesh_layer.reset(new voxblox::MeshLayer(tsdf_map->block_size()));
+
   //planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
   mesh_pub = priv_nh.advertise<voxblox_msgs::Mesh>("vis_voxblox_mesh", 1, true);
 }
@@ -97,21 +105,21 @@ VoxbloxManager::computeNeighborKeys(const MappingKey& point, const NeighborConne
 MappingNode 
 VoxbloxManager::search(const MappingKey& key)
 {
-  tree_mtx.lock();
-  octomap::OcTreeKey key_ = toOcTreeKey(key);
-  octomap_vpp::RoiOcTreeNode* node_ = planning_tree->search(key_);
+  // tree_mtx.lock();
+  // octomap::OcTreeKey key_ = toOcTreeKey(key);
+  // octomap_vpp::RoiOcTreeNode* node_ = planning_tree->search(key_);
 
-  if (node_ == NULL)
-  {
-    tree_mtx.unlock();
-    MappingNode node;
-    node.state = UNKNOWN;
-    return node;
-  }
+  // if (node_ == NULL)
+  // {
+  //   tree_mtx.unlock();
+  //   MappingNode node;
+  //   node.state = UNKNOWN;
+  //   return node;
+  // }
 
   MappingNode node;
-  node.occ_p = node_->getOccupancy();
-  node.roi_p = node_->getRoiProb();
+  // node.occ_p = node_->getOccupancy();
+  // node.roi_p = node_->getRoiProb();
 
   if (node.occ_p < 0.5) // TODO: hardcoded
   {
@@ -134,27 +142,26 @@ VoxbloxManager::search(const MappingKey& key)
 bool 
 VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
 {
-  // Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
-  // Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
-  // bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+  Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
+  Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
+  bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
 
-  // octomap::Pointcloud inlierCloud, outlierCloud, fullCloud;
-  // if (apply_tf)
-  //   octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, pc_transform, inlierCloud, outlierCloud, fullCloud);
-  // else
-  //   octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
+  octomap::Pointcloud inlierCloud, outlierCloud, fullCloud;
+  if (apply_tf)
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, pc_transform, inlierCloud, outlierCloud, fullCloud);
+  else
+    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
 
-  // tree_mtx.lock();
-  // ros::Time insert_time_start(ros::Time::now());
-  // const octomap::point3d scan_orig(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
+  tree_mtx.lock();
+  ros::Time insert_time_start(ros::Time::now());
+  const octomap::point3d scan_orig(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
 
   // TODO: QUESTION: insertPointCloud and insertRegionScan???
   // planning_tree->insertPointCloud(fullCloud, scan_orig);
   // planning_tree->insertRegionScan(inlierCloud, outlierCloud);
 
-
-  // ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
-  // tree_mtx.unlock();
+  ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
+  tree_mtx.unlock();
   return true;
 }
 
@@ -317,21 +324,15 @@ VoxbloxManager::publishMap()
 {
   if (mesh_pub.getNumSubscribers() <= 0) return; // skip if no one subscribed...
 
-  // TODO
-  // octomap_msgs::Octomap mesh_msg;
-  // mesh_msg.header.frame_id = map_frame;
-  // mesh_msg.header.stamp = ros::Time::now();
-  // tree_mtx.lock();
-  // bool msg_generated = octomap_msgs::fullMapToMsg(*planning_tree, mesh_msg);
-  // tree_mtx.unlock();
+  // TODO: generate mesh if needed
+  tree_mtx.lock();
+  voxblox_msgs::Mesh mesh_msg;
+  voxblox::generateVoxbloxMeshMsg(mesh_layer, color_mode, &mesh_msg);
+  mesh_msg.header.frame_id = map_frame;
+  mesh_msg.header.stamp = ros::Time::now();
+  tree_mtx.unlock();
 
-  // if (!msg_generated)
-  // {
-  //   ROS_ERROR("publishMap: Couldn't generate the map!");
-  //   return;
-  // }
-
-  // mesh_pub.publish(mesh_msg);
+  mesh_pub.publish(mesh_msg);
 }
 
 } // namespace view_motion_planner
