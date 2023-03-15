@@ -7,7 +7,8 @@
 #include <filesystem>
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox_ros/mesh_vis.h>
-
+#include <minkindr_conversions/kindr_msg.h>
+#include <minkindr_conversions/kindr_tf.h>
 
 namespace view_motion_planner
 {
@@ -18,6 +19,10 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
   tsdf_server.reset(new voxblox::ModifiedTsdfServer(nh, priv_nh));
   // overwrite protected members
   tsdf_server->world_frame_ = map_frame;
+  tsdf_server->mesh_filename_ = std::string(""); // disable autosave
+  tsdf_server->color_mode_ = voxblox::getColorModeFromString("color");
+  tsdf_server->verbose_ = true;
+  tsdf_server->publish_pointclouds_on_update_ = false; // manual publish on update
 
 }
 
@@ -154,6 +159,13 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
   // TODO: QUESTION: insertPointCloud and insertRegionScan???
   // planning_tree->insertPointCloud(fullCloud, scan_orig);
   // planning_tree->insertRegionScan(inlierCloud, outlierCloud);
+
+  // TODO: IDEA: pass PointXYZI ? 
+
+  bool is_freespace_pointcloud = false;
+  voxblox::Transformation voxtransform;
+  tf::transformMsgToKindr(pc_transform, &voxtransform);
+  tsdf_server->processPointCloudMessageAndInsert(msg->cloud, voxtransform, is_freespace_pointcloud);
 
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tree_mtx.unlock();

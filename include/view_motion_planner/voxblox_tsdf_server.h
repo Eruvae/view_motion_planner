@@ -86,6 +86,11 @@ class ModifiedTsdfServer {
       const sensor_msgs::PointCloud2::Ptr& pointcloud_msg,
       const Transformation& T_G_C, const bool is_freespace_pointcloud);
 
+  // TODO: Modified version without shared_ptr pc
+  virtual void processPointCloudMessageAndInsert(
+      const sensor_msgs::PointCloud2& pointcloud_msg,
+      const Transformation& T_G_C, const bool is_freespace_pointcloud);
+
   void integratePointcloud(const Transformation& T_G_C,
                            const Pointcloud& ptcloud_C, const Colors& colors,
                            const bool is_freespace_pointcloud = false);
