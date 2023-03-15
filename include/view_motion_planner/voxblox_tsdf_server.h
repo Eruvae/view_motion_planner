@@ -64,16 +64,16 @@ namespace voxblox {
 
 constexpr float kDefaultMaxIntensity = 100.0;
 
-class TsdfServer {
+class ModifiedTsdfServer {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  TsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
-  TsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private,
+  ModifiedTsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
+  ModifiedTsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private,
              const TsdfMap::Config& config,
              const TsdfIntegratorBase::Config& integrator_config,
              const MeshIntegratorConfig& mesh_config);
-  virtual ~TsdfServer() {}
+  virtual ~ModifiedTsdfServer() {}
 
   void getServerConfigFromRosParam(const ros::NodeHandle& nh_private);
 
@@ -149,7 +149,9 @@ class TsdfServer {
   /// Overwrites the layer with what's coming from the topic!
   void tsdfMapCallback(const voxblox_msgs::Layer& layer_msg);
 
- protected:
+// TODO: exposed protected members to minimize modifications
+//  protected: 
+
   /**
    * Gets the next pointcloud that has an available transform to process from
    * the queue.
