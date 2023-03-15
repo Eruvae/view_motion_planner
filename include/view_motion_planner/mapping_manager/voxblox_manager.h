@@ -7,6 +7,7 @@
 #include <octomap_vpp/RoiOcTree.h>
 #include <ros/ros.h>
 #include <mutex>
+#include <view_motion_planner/voxblox_tsdf_server.h> // modified header
 #include <voxblox_msgs/Mesh.h>
 #include <voxblox/utils/neighbor_tools.h>
 
@@ -21,16 +22,13 @@ private:
   std::string map_frame;
   double resolution;
   double inv_resolution;
-  ros::Publisher mesh_pub;
   std::recursive_mutex targets_mtx; // lock before updating or exposing target shared_ptr's because shared_ptr modification is not atomic!
   TargetVPtr roi_targets;
   TargetVPtr expl_targets;
   TargetVPtr border_targets;
 
   std::recursive_mutex tree_mtx;
-  
-  // TODO
-  //std::shared_ptr<octomap_vpp::RoiOcTree> planning_tree;
+  std::shared_ptr<voxblox::ModifiedTsdfServer> tsdf_server;
 
 public:
   VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);

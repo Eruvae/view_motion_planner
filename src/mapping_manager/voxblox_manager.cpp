@@ -8,29 +8,24 @@
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox_ros/mesh_vis.h>
 
+
 namespace view_motion_planner
 {
 
 
 VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution), inv_resolution(1.0/resolution)
 {
-  voxblox::TsdfMap::Config tsdf_config;
-  voxblox::MeshIntegratorConfig mesh_config;
+  tsdf_server.reset(new voxblox::ModifiedTsdfServer(nh, priv_nh));
+  // overwrite protected members
+  tsdf_server->world_frame_ = map_frame;
 
-  tsdf_map_.reset(new TsdfMap(config));
-  mesh_layer.reset(new voxblox::MeshLayer(tsdf_map->block_size()));
-
-  //planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
-  mesh_pub = priv_nh.advertise<voxblox_msgs::Mesh>("vis_voxblox_mesh", 1, true);
 }
 
 
 void 
 VoxbloxManager::resetMap()
 {
-  // planning_tree->clear();
-  // planning_tree->clearRoiKeys();
-  // publishMap(); // for clearing the map on rviz
+  tsdf_server->clear();
 }
 
 // TODO: not tested
@@ -275,46 +270,25 @@ VoxbloxManager::saveToFile(const std::string &filename, bool overwrite)
     }
   }
 
-  tree_mtx.lock();
+  bool result = tsdf_server->saveMap(filename);
 
-  // TODO
-  //bool result = planning_tree->write(filename);
-
-  tree_mtx.unlock();
-  // return result;
-
-  return false; // TODO
+  return result;
 }
 
 int 
 VoxbloxManager::loadFromFile(const std::string &filename, const geometry_msgs::Transform &offset)
 {
-  // Eigen::Translation3d translation_(offset.translation.x, offset.translation.y, offset.translation.z);
-  // Eigen::Quaterniond rotation_(offset.rotation.w, offset.rotation.x, offset.rotation.y, offset.rotation.z);
-  // bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+  Eigen::Translation3d translation_(offset.translation.x, offset.translation.y, offset.translation.z);
+  Eigen::Quaterniond rotation_(offset.rotation.w, offset.rotation.x, offset.rotation.y, offset.rotation.z);
+  bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
 
-  // octomap_vpp::RoiOcTree *map = nullptr;
-  // octomap::AbstractOcTree *tree =  octomap::AbstractOcTree::read(filename);
-  // if (!tree)
-  //   return -1;
+  if (apply_tf)
+  {
+    ROS_FATAL("VoxbloxManager::loadFromFile: offset is not supported!");
+  }
 
-  // map = dynamic_cast<octomap_vpp::RoiOcTree*>(tree);
-  // if(!map)
-  // {
-  //   delete tree;
-  //   return -2;
-  // }
-
-  // if (apply_tf)
-  // {
-  //   moveOctomap(map, offset);
-  // }
-
-  // tree_mtx.lock();
-  // planning_tree.reset(map);
-  // planning_tree->computeRoiKeys();
-  // tree_mtx.unlock();
-  // publishMap();
+  bool result = tsdf_server->loadMap(filename);
+  if (!result) return -1;
   return 0;
 }
 
@@ -322,17 +296,7 @@ VoxbloxManager::loadFromFile(const std::string &filename, const geometry_msgs::T
 void 
 VoxbloxManager::publishMap()
 {
-  if (mesh_pub.getNumSubscribers() <= 0) return; // skip if no one subscribed...
-
-  // TODO: generate mesh if needed
-  tree_mtx.lock();
-  voxblox_msgs::Mesh mesh_msg;
-  voxblox::generateVoxbloxMeshMsg(mesh_layer, color_mode, &mesh_msg);
-  mesh_msg.header.frame_id = map_frame;
-  mesh_msg.header.stamp = ros::Time::now();
-  tree_mtx.unlock();
-
-  mesh_pub.publish(mesh_msg);
+  tsdf_server->updateMesh(); // publishes pointclouds, tsdf, and mesh
 }
 
 } // namespace view_motion_planner
