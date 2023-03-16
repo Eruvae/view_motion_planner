@@ -27,8 +27,9 @@ private:
   TargetVPtr expl_targets;
   TargetVPtr border_targets;
 
-  std::recursive_mutex tree_mtx;
+  std::recursive_mutex tsdf_mutex;
   std::shared_ptr<voxblox::ModifiedTsdfServer> tsdf_server;
+  bool tsdf_initialized = false;
 
 public:
   VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);

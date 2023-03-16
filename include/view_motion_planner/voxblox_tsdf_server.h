@@ -68,27 +68,28 @@ class ModifiedTsdfServer {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  ModifiedTsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private);
+  ModifiedTsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private, const std::string& map_frame);
   ModifiedTsdfServer(const ros::NodeHandle& nh, const ros::NodeHandle& nh_private,
              const TsdfMap::Config& config,
              const TsdfIntegratorBase::Config& integrator_config,
-             const MeshIntegratorConfig& mesh_config);
+             const MeshIntegratorConfig& mesh_config,
+             const std::string& map_frame);
   virtual ~ModifiedTsdfServer() {}
 
   void getServerConfigFromRosParam(const ros::NodeHandle& nh_private);
 
-  void insertPointcloud(const sensor_msgs::PointCloud2::Ptr& pointcloud);
+  // void insertPointcloud(const sensor_msgs::PointCloud2::Ptr& pointcloud);
 
-  void insertFreespacePointcloud(
-      const sensor_msgs::PointCloud2::Ptr& pointcloud);
+  // void insertFreespacePointcloud(
+  //     const sensor_msgs::PointCloud2::Ptr& pointcloud);
 
-  virtual void processPointCloudMessageAndInsert(
-      const sensor_msgs::PointCloud2::Ptr& pointcloud_msg,
-      const Transformation& T_G_C, const bool is_freespace_pointcloud);
+  // virtual void processPointCloudMessageAndInsert(
+  //     const sensor_msgs::PointCloud2::Ptr& pointcloud_msg,
+  //     const Transformation& T_G_C, const bool is_freespace_pointcloud);
 
   // TODO: Modified version without shared_ptr pc
   virtual void processPointCloudMessageAndInsert(
-      const sensor_msgs::PointCloud2& pointcloud_msg,
+      sensor_msgs::PointCloud2& pointcloud_msg,
       const Transformation& T_G_C, const bool is_freespace_pointcloud);
 
   void integratePointcloud(const Transformation& T_G_C,

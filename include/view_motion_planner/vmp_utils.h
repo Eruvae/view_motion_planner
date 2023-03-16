@@ -160,9 +160,11 @@ static inline sensor_msgs::PointCloud2Ptr targetsToPointCloud2Msg(const std::vec
                                                                   const std::string& map_frame,
                                                                   uint8_t r = 0, uint8_t g = 0, uint8_t b = 0)
 {
-  pcl::PointCloud<PointT> cloud;
+  sensor_msgs::PointCloud2Ptr cloud2(new sensor_msgs::PointCloud2());
+  std::unique_ptr<pcl::PointCloud<PointT>> cloud(new pcl::PointCloud<PointT>());
+  if (targets.size() <= 0) return cloud2;
 
-  cloud.points.reserve(targets.size());
+  cloud->points.reserve(targets.size());
   for (int i = 0; i < targets.size(); ++i) {
     PointT pt;
 
@@ -175,11 +177,10 @@ static inline sensor_msgs::PointCloud2Ptr targetsToPointCloud2Msg(const std::vec
     pt.x = targets[i].x();
     pt.y = targets[i].y();
     pt.z = targets[i].z();
-    cloud.points.push_back(pt);
+    cloud->points.push_back(pt);
   }
 
-  sensor_msgs::PointCloud2Ptr cloud2(new sensor_msgs::PointCloud2());
-  pcl::toROSMsg(cloud, *cloud2);
+  pcl::toROSMsg(*cloud, *cloud2);
   cloud2->header.frame_id = map_frame;
   cloud2->header.stamp = ros::Time::now(); // TODO: ?
   return cloud2;

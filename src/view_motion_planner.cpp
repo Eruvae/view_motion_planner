@@ -34,6 +34,7 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
 
   graph_manager.reset(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph));
 
+  // TODO: maybe move into the mapping manager
   // visualization topics
   roi_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_roi", 1, true);
   expl_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_expl", 1, true);
@@ -718,6 +719,14 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
 {
   pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(max_wait));
   
+  // TODO: pc_transform -> sensor origin in the map frame.
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
   geometry_msgs::Transform pc_transform;
   if (msg->cloud.header.frame_id != map_frame)
   {

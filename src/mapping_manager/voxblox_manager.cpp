@@ -7,8 +7,11 @@
 #include <filesystem>
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/ros_params.h>
 #include <minkindr_conversions/kindr_msg.h>
 #include <minkindr_conversions/kindr_tf.h>
+#include <pcl_ros/transforms.h>
+
 
 namespace view_motion_planner
 {
@@ -16,21 +19,54 @@ namespace view_motion_planner
 
 VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution), inv_resolution(1.0/resolution)
 {
-  tsdf_server.reset(new voxblox::ModifiedTsdfServer(nh, priv_nh));
-  // overwrite protected members
-  tsdf_server->world_frame_ = map_frame;
-  tsdf_server->mesh_filename_ = std::string(""); // disable autosave
-  tsdf_server->color_mode_ = voxblox::getColorModeFromString("color");
-  tsdf_server->verbose_ = true;
-  tsdf_server->publish_pointclouds_on_update_ = false; // manual publish on update
+  voxblox::TsdfMap::Config config = voxblox::getTsdfMapConfigFromRosParam(priv_nh);
+  voxblox::TsdfIntegratorBase::Config integrator_config = voxblox::getTsdfIntegratorConfigFromRosParam(priv_nh);
+  voxblox::MeshIntegratorConfig mesh_config = voxblox::getMeshIntegratorConfigFromRosParam(priv_nh);
 
+  // overwrite protected members
+  config.tsdf_voxel_size = 0.004;
+  config.tsdf_voxels_per_side = 64;
+  integrator_config.voxel_carving_enabled = true;
+
+  ROS_WARN("================ voxblox::TsdfMap::Config ================");
+  ROS_INFO("tsdf_voxel_size: %f", config.tsdf_voxel_size);
+  ROS_INFO("tsdf_voxels_per_side: %ld", config.tsdf_voxels_per_side);
+  ROS_WARN("================ voxblox::TsdfIntegratorBase::Config ================");
+  ROS_INFO("allow_clear: %d", integrator_config.allow_clear);
+  ROS_INFO("clear_checks_every_n_frames: %d", integrator_config.clear_checks_every_n_frames);
+  ROS_INFO("default_truncation_distance: %f", integrator_config.default_truncation_distance);
+  ROS_INFO("enable_anti_grazing: %d", integrator_config.enable_anti_grazing);
+  ROS_INFO("integration_order_mode: %s", integrator_config.integration_order_mode.c_str());
+  ROS_INFO("integrator_threads: %d", integrator_config.integrator_threads);
+  ROS_INFO("max_consecutive_ray_collisions: %d", integrator_config.max_consecutive_ray_collisions);
+  ROS_INFO("max_integration_time_s: %f", integrator_config.max_integration_time_s);
+  ROS_INFO("max_ray_length_m: %f", integrator_config.max_ray_length_m);
+  ROS_INFO("max_weight: %f", integrator_config.max_weight);
+  ROS_INFO("min_ray_length_m: %f", integrator_config.min_ray_length_m);
+  ROS_INFO("sparsity_compensation_factor: %f", integrator_config.sparsity_compensation_factor);
+  ROS_INFO("start_voxel_subsampling_factor: %f", integrator_config.start_voxel_subsampling_factor);
+  ROS_INFO("use_const_weight: %d", integrator_config.use_const_weight);
+  ROS_INFO("use_sparsity_compensation_factor: %d", integrator_config.use_sparsity_compensation_factor);
+  ROS_INFO("use_weight_dropoff: %d", integrator_config.use_weight_dropoff);
+  ROS_INFO("voxel_carving_enabled: %d", integrator_config.voxel_carving_enabled);
+  ROS_WARN("================ voxblox::MeshIntegratorConfig ================");
+  ROS_INFO("integrator_threads: %d", mesh_config.integrator_threads);
+  ROS_INFO("min_weight: %f", mesh_config.min_weight);
+  ROS_INFO("use_color: %d", mesh_config.use_color);
+  ROS_WARN("====================================================");
+
+  tsdf_mutex.lock();
+  tsdf_server.reset(new voxblox::ModifiedTsdfServer(nh, priv_nh, config, integrator_config, mesh_config, map_frame));
+  tsdf_mutex.unlock();
 }
 
 
 void 
 VoxbloxManager::resetMap()
 {
+  tsdf_mutex.lock();
   tsdf_server->clear();
+  tsdf_mutex.unlock();
 }
 
 // TODO: not tested
@@ -134,7 +170,7 @@ VoxbloxManager::search(const MappingKey& key)
     node.state = ROI;
   }
 
-  tree_mtx.unlock();
+  //tree_mtx.unlock();
   return node;
 }
 
@@ -144,31 +180,55 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
 {
   Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
   Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
-  bool apply_tf = !( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+  Eigen::Isometry3d pc_inv_transformd = (translation_ * rotation_).inverse();
+  Eigen::MatrixXf pc_inv_transformf = pc_inv_transformd.matrix().cast<float>();
 
-  octomap::Pointcloud inlierCloud, outlierCloud, fullCloud;
-  if (apply_tf)
-    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, pc_transform, inlierCloud, outlierCloud, fullCloud);
-  else
-    octomap_vpp::pointCloud2ToOctomapByIndices(msg->cloud, msg->roi_indices, inlierCloud, outlierCloud, fullCloud);
+  // TODO: pc already comes transformed. but we need the previous state. unfortunately pc_transform is empty here.
+  ROS_FATAL_STREAM(pc_inv_transformf);
+  
+  // TODO: inverse transform pointcloud! a terrible workaround to adapt voxblox
+  std::unique_ptr<sensor_msgs::PointCloud2> inv_msg(new sensor_msgs::PointCloud2());
+  pcl_ros::transformPointCloud(pc_inv_transformf, msg->cloud, *inv_msg);
 
-  tree_mtx.lock();
+  ROS_FATAL("frame_id: %s", msg->cloud.header.frame_id.c_str());
+
+  // Preprocess pointcloud and set PointXYZI where roi indices have high intensity values.
+  // TODO: Doesn't work with PointXYZI. Worked with PointXYZRGB.
+  pcl::PointCloud<pcl::PointXYZRGB> pc_xyzi;
+  pcl::fromROSMsg(*inv_msg, pc_xyzi); // TODO: This line is printing "Failed to find match for field 'intensity'." 
+  for (int i=0; i<pc_xyzi.size(); i++)
+  {
+    pc_xyzi[i].a = 255;
+    pc_xyzi[i].r = 0;
+    pc_xyzi[i].g = 0;
+    pc_xyzi[i].b = 0;
+  }
+  for (int i=0; i<msg->roi_indices.size(); i++)
+  {
+    int idx = msg->roi_indices[i];
+    if (idx < 0 || idx >= pc_xyzi.size())
+    {
+      ROS_FATAL("registerPointcloudWithRoi: There is a problem with roi_indices in pointcloud_roi!!!");
+      return false;
+    }
+    pc_xyzi[idx].a = 255;
+    pc_xyzi[idx].r = 255;
+    pc_xyzi[idx].g = 255;
+    pc_xyzi[idx].b = 255;
+  }
+  sensor_msgs::PointCloud2 pc2_xyzi;
+  pcl::toROSMsg(pc_xyzi, pc2_xyzi);
+
+  // Insert pointcloud
+  tsdf_mutex.lock();
   ros::Time insert_time_start(ros::Time::now());
-  const octomap::point3d scan_orig(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
-
-  // TODO: QUESTION: insertPointCloud and insertRegionScan???
-  // planning_tree->insertPointCloud(fullCloud, scan_orig);
-  // planning_tree->insertRegionScan(inlierCloud, outlierCloud);
-
-  // TODO: IDEA: pass PointXYZI ? 
-
-  bool is_freespace_pointcloud = false;
   voxblox::Transformation voxtransform;
   tf::transformMsgToKindr(pc_transform, &voxtransform);
-  tsdf_server->processPointCloudMessageAndInsert(msg->cloud, voxtransform, is_freespace_pointcloud);
-
+  tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, /*is_freespace_pointcloud=*/false);
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
-  tree_mtx.unlock();
+  tsdf_mutex.unlock();
+
+  tsdf_initialized = true;
   return true;
 }
 
@@ -176,13 +236,18 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
 void 
 VoxbloxManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, bool can_skip_roi, bool can_skip_expl, bool can_skip_border, NeighborConnectivity neighbor_con)
 {
-  std::scoped_lock lock(tree_mtx, targets_mtx); // more robust to deadlocks
+  std::scoped_lock lock(tsdf_mutex, targets_mtx); // more robust to deadlocks
 
   for (unsigned int i = 0; i < 3; i++)
   {
     if (sr_min(i) > sr_max(i))
       std::swap(sr_min(i), sr_max(i));
   }
+
+  // TODO: TEMPORARLY
+  roi_targets = std::make_shared<TargetV>();
+  expl_targets = std::make_shared<TargetV>();
+  border_targets = std::make_shared<TargetV>();
 
   /*
   if (!can_skip_roi)
@@ -282,7 +347,9 @@ VoxbloxManager::saveToFile(const std::string &filename, bool overwrite)
     }
   }
 
+  tsdf_mutex.lock();
   bool result = tsdf_server->saveMap(filename);
+  tsdf_mutex.unlock();
 
   return result;
 }
@@ -299,7 +366,10 @@ VoxbloxManager::loadFromFile(const std::string &filename, const geometry_msgs::T
     ROS_FATAL("VoxbloxManager::loadFromFile: offset is not supported!");
   }
 
+  tsdf_mutex.lock();
   bool result = tsdf_server->loadMap(filename);
+  tsdf_mutex.unlock();
+
   if (!result) return -1;
   return 0;
 }
@@ -308,7 +378,12 @@ VoxbloxManager::loadFromFile(const std::string &filename, const geometry_msgs::T
 void 
 VoxbloxManager::publishMap()
 {
+  if (!tsdf_initialized) return;
+  tsdf_mutex.lock();
   tsdf_server->updateMesh(); // publishes pointclouds, tsdf, and mesh
+  //tsdf_server->generateMesh(); // publishes pointclouds, tsdf, and mesh
+  //tsdf_server->publishPointclouds();
+  tsdf_mutex.unlock();
 }
 
 } // namespace view_motion_planner
