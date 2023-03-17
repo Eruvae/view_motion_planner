@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ADDRESS SANITIZER
-#add_compile_options(-fsanitize=address)
-#add_link_options(-fsanitize=address)
+#add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+#add_link_options(-fsanitize=address -fno-omit-frame-pointer)
 
 set (CATKIN_DEPENDENCIES
     roscpp
