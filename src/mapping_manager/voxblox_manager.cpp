@@ -24,9 +24,9 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
   voxblox::MeshIntegratorConfig mesh_config = voxblox::getMeshIntegratorConfigFromRosParam(priv_nh);
 
   // overwrite protected members
-  config.tsdf_voxel_size = 0.004;
+  config.tsdf_voxel_size = 0.01;
   config.tsdf_voxels_per_side = 64;
-  integrator_config.voxel_carving_enabled = true;
+  integrator_config.voxel_carving_enabled = false;
 
   ROS_WARN("================ voxblox::TsdfMap::Config ================");
   ROS_INFO("tsdf_voxel_size: %f", config.tsdf_voxel_size);
@@ -37,7 +37,7 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
   ROS_INFO("default_truncation_distance: %f", integrator_config.default_truncation_distance);
   ROS_INFO("enable_anti_grazing: %d", integrator_config.enable_anti_grazing);
   ROS_INFO("integration_order_mode: %s", integrator_config.integration_order_mode.c_str());
-  ROS_INFO("integrator_threads: %d", integrator_config.integrator_threads);
+  ROS_INFO("integrator_threads: %lu", integrator_config.integrator_threads);
   ROS_INFO("max_consecutive_ray_collisions: %d", integrator_config.max_consecutive_ray_collisions);
   ROS_INFO("max_integration_time_s: %f", integrator_config.max_integration_time_s);
   ROS_INFO("max_ray_length_m: %f", integrator_config.max_ray_length_m);
@@ -50,7 +50,7 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
   ROS_INFO("use_weight_dropoff: %d", integrator_config.use_weight_dropoff);
   ROS_INFO("voxel_carving_enabled: %d", integrator_config.voxel_carving_enabled);
   ROS_WARN("================ voxblox::MeshIntegratorConfig ================");
-  ROS_INFO("integrator_threads: %d", mesh_config.integrator_threads);
+  ROS_INFO("integrator_threads: %lu", mesh_config.integrator_threads);
   ROS_INFO("min_weight: %f", mesh_config.min_weight);
   ROS_INFO("use_color: %d", mesh_config.use_color);
   ROS_WARN("====================================================");
@@ -178,24 +178,20 @@ VoxbloxManager::search(const MappingKey& key)
 bool 
 VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
 {
-  Eigen::Translation3d translation_(pc_transform.translation.x, pc_transform.translation.y, pc_transform.translation.z);
-  Eigen::Quaterniond rotation_(pc_transform.rotation.w, pc_transform.rotation.x, pc_transform.rotation.y, pc_transform.rotation.z);
-  Eigen::Isometry3d pc_inv_transformd = (translation_ * rotation_).inverse();
-  Eigen::MatrixXf pc_inv_transformf = pc_inv_transformd.matrix().cast<float>();
-
-  // TODO: pc already comes transformed. but we need the previous state. unfortunately pc_transform is empty here.
-  ROS_FATAL_STREAM(pc_inv_transformf);
-  
-  // TODO: inverse transform pointcloud! a terrible workaround to adapt voxblox
-  std::unique_ptr<sensor_msgs::PointCloud2> inv_msg(new sensor_msgs::PointCloud2());
-  pcl_ros::transformPointCloud(pc_inv_transformf, msg->cloud, *inv_msg);
-
-  ROS_FATAL("frame_id: %s", msg->cloud.header.frame_id.c_str());
+  Eigen::Translation3d translation_(msg->transform.translation.x, msg->transform.translation.y, msg->transform.translation.z);
+  Eigen::Quaterniond rotation_(msg->transform.rotation.w, msg->transform.rotation.x, msg->transform.rotation.y, msg->transform.rotation.z);
+  bool is_msg_transform_identity = ( translation_.translation().isZero() && rotation_.matrix().isIdentity() );
+  if (!is_msg_transform_identity)
+  {
+    ROS_FATAL("VoxbloxManager::registerPointcloudWithRoi: Input pointcloud should be in the sensor frame. Current frame: %s", msg->cloud.header.frame_id.c_str());
+    ROS_FATAL("VoxbloxManager::registerPointcloudWithRoi: Skipping...");
+    return false;
+  }
 
   // Preprocess pointcloud and set PointXYZI where roi indices have high intensity values.
   // TODO: Doesn't work with PointXYZI. Worked with PointXYZRGB.
   pcl::PointCloud<pcl::PointXYZRGB> pc_xyzi;
-  pcl::fromROSMsg(*inv_msg, pc_xyzi); // TODO: This line is printing "Failed to find match for field 'intensity'." 
+  pcl::fromROSMsg(msg->cloud, pc_xyzi); // TODO: This line is printing "Failed to find match for field 'intensity'." 
   for (int i=0; i<pc_xyzi.size(); i++)
   {
     pc_xyzi[i].a = 255;
@@ -219,12 +215,19 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
   sensor_msgs::PointCloud2 pc2_xyzi;
   pcl::toROSMsg(pc_xyzi, pc2_xyzi);
 
+  sensor_msgs::PointCloud2 tmp = msg->cloud;
+
   // Insert pointcloud
   tsdf_mutex.lock();
   ros::Time insert_time_start(ros::Time::now());
   voxblox::Transformation voxtransform;
   tf::transformMsgToKindr(pc_transform, &voxtransform);
-  tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, /*is_freespace_pointcloud=*/false);
+  
+  //tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, /*is_freespace_pointcloud=*/false);
+
+  // TODO: temporarly register the input directly for debugging
+  tsdf_server->processPointCloudMessageAndInsert(tmp, voxtransform, /*is_freespace_pointcloud=*/false);
+
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tsdf_mutex.unlock();
 
@@ -380,9 +383,10 @@ VoxbloxManager::publishMap()
 {
   if (!tsdf_initialized) return;
   tsdf_mutex.lock();
-  tsdf_server->updateMesh(); // publishes pointclouds, tsdf, and mesh
+  //tsdf_server->updateMesh(); // publishes pointclouds, tsdf, and mesh
   //tsdf_server->generateMesh(); // publishes pointclouds, tsdf, and mesh
   //tsdf_server->publishPointclouds();
+  tsdf_server->publishTsdfSurfacePoints();
   tsdf_mutex.unlock();
 }
 
