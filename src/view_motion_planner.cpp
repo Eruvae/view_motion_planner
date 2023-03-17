@@ -718,15 +718,16 @@ void ViewMotionPlanner::plannerLoop()
 void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
 {
   pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(max_wait));
-  
-  // TODO: pc_transform -> sensor origin in the map frame.
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
-  // if the msg frame_id is map frame or something else. then inverse transform the whole pointcloud!!!!!!!!!!
+  if (msg == nullptr)
+  {
+    ROS_WARN("waitForPointcloudWithRoi: ros::topic::waitForMessage failed!");
+    return;
+  }
+
+  // world_frame ---(pc_transform)--> msg_frame
+  // world_frame ---(msg.transform)--> sensor_frame
+  // msg_frame ---(inv(pc_transform)*msg.transform)--> sensor_frame
+
   geometry_msgs::Transform pc_transform;
   if (msg->cloud.header.frame_id != map_frame)
   {
