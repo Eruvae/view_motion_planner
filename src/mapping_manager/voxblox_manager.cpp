@@ -25,8 +25,10 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
 
   // overwrite protected members
   config.tsdf_voxel_size = 0.01;
+  integrator_config.default_truncation_distance = config.tsdf_voxel_size*2;
   config.tsdf_voxels_per_side = 64;
   integrator_config.voxel_carving_enabled = false;
+  integrator_config.max_ray_length_m = 2.0;
 
   ROS_WARN("================ voxblox::TsdfMap::Config ================");
   ROS_INFO("tsdf_voxel_size: %f", config.tsdf_voxel_size);
@@ -215,18 +217,16 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
   sensor_msgs::PointCloud2 pc2_xyzi;
   pcl::toROSMsg(pc_xyzi, pc2_xyzi);
 
-  sensor_msgs::PointCloud2 tmp = msg->cloud;
-
   // Insert pointcloud
   tsdf_mutex.lock();
   ros::Time insert_time_start(ros::Time::now());
   voxblox::Transformation voxtransform;
   tf::transformMsgToKindr(pc_transform, &voxtransform);
-  
-  //tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, /*is_freespace_pointcloud=*/false);
+  tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, false);
 
   // TODO: temporarly register the input directly for debugging
-  tsdf_server->processPointCloudMessageAndInsert(tmp, voxtransform, /*is_freespace_pointcloud=*/false);
+  //sensor_msgs::PointCloud2 tmp = msg->cloud;
+  //tsdf_server->processPointCloudMessageAndInsert(tmp, voxtransform, false);
 
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tsdf_mutex.unlock();
