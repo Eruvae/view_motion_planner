@@ -724,10 +724,6 @@ void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
     return;
   }
 
-  // world_frame ---(pc_transform)--> msg_frame
-  // world_frame ---(msg.transform)--> sensor_frame
-  // msg_frame ---(inv(pc_transform)*msg.transform)--> sensor_frame
-
   geometry_msgs::Transform pc_transform;
   if (msg->cloud.header.frame_id != map_frame)
   {

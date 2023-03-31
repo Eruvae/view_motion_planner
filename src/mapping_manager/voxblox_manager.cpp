@@ -224,10 +224,6 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
   tf::transformMsgToKindr(pc_transform, &voxtransform);
   tsdf_server->processPointCloudMessageAndInsert(pc2_xyzi, voxtransform, false);
 
-  // TODO: temporarly register the input directly for debugging
-  //sensor_msgs::PointCloud2 tmp = msg->cloud;
-  //tsdf_server->processPointCloudMessageAndInsert(tmp, voxtransform, false);
-
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tsdf_mutex.unlock();
 
