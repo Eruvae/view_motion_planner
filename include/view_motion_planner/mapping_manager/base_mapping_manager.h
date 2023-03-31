@@ -49,7 +49,7 @@ public:
   /// @param connectivity 
   /// @param set 
   /// @return (not decided)
-  virtual bool computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set) = 0;
+  virtual bool computeNeighborKeys(const MappingKey& point, MappingKeySet& set, const NeighborConnectivity connectivity) = 0;
 
   /// @brief 
   /// @param key 

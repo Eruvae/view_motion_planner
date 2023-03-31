@@ -24,11 +24,12 @@ VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, co
   voxblox::MeshIntegratorConfig mesh_config = voxblox::getMeshIntegratorConfigFromRosParam(priv_nh);
 
   // overwrite protected members
-  config.tsdf_voxel_size = 0.01;
-  integrator_config.default_truncation_distance = config.tsdf_voxel_size*2;
+  config.tsdf_voxel_size = resolution;
+  integrator_config.default_truncation_distance = config.tsdf_voxel_size*2; // TODO
   config.tsdf_voxels_per_side = 64;
-  integrator_config.voxel_carving_enabled = false;
-  integrator_config.max_ray_length_m = 2.0;
+  integrator_config.voxel_carving_enabled = true; // if false, from surface to truncated distance will be registered. if true, from origin to truncated distance will be registered.
+  integrator_config.allow_clear = false;
+  integrator_config.max_ray_length_m = 2.0; // TODO
 
   ROS_WARN("================ voxblox::TsdfMap::Config ================");
   ROS_INFO("tsdf_voxel_size: %f", config.tsdf_voxel_size);
@@ -97,9 +98,8 @@ VoxbloxManager::computeRayKeys(const octomap::point3d& origin, const octomap::po
   return success;
 }
 
-// TODO: not tested
 bool 
-VoxbloxManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
+VoxbloxManager::computeNeighborKeys(const MappingKey& point, MappingKeySet& set, const NeighborConnectivity connectivity)
 {
   voxblox::GlobalIndex vkey = toVoxbloxKey(point);
 
@@ -193,7 +193,7 @@ VoxbloxManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudW
   // Preprocess pointcloud and set PointXYZI where roi indices have high intensity values.
   // TODO: Doesn't work with PointXYZI. Worked with PointXYZRGB.
   pcl::PointCloud<pcl::PointXYZRGB> pc_xyzi;
-  pcl::fromROSMsg(msg->cloud, pc_xyzi); // TODO: This line is printing "Failed to find match for field 'intensity'." 
+  pcl::fromROSMsg(msg->cloud, pc_xyzi); // TODO: This line is printing "Failed to find match for field 'intensity'." if PointXYZI is used.
   for (int i=0; i<pc_xyzi.size(); i++)
   {
     pc_xyzi[i].a = 255;
@@ -243,63 +243,101 @@ VoxbloxManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, 
       std::swap(sr_min(i), sr_max(i));
   }
 
-  // TODO: TEMPORARLY
-  roi_targets = std::make_shared<TargetV>();
-  expl_targets = std::make_shared<TargetV>();
-  border_targets = std::make_shared<TargetV>();
+  // TODO: check if point is in sampling region
 
-  /*
-  if (!can_skip_roi)
+  TargetVPtr new_roi_targets = std::make_shared<TargetV>();
+  TargetVPtr new_expl_targets = std::make_shared<TargetV>();
+  TargetVPtr new_border_targets = std::make_shared<TargetV>();
+
+  // Iterate all allocated blocks
+  auto layer = tsdf_server->tsdf_map_->getTsdfLayerConstPtr();
+  size_t vps = layer->voxels_per_side();
+  size_t num_voxels_per_block = vps * vps * vps;
+  voxblox::BlockIndexList block_list;
+  layer->getAllAllocatedBlocks(&block_list);
+  for (const voxblox::BlockIndex& block_index : block_list)
   {
-    TargetVPtr new_roi_targets = std::make_shared<TargetV>();
-    //new_roi_targets->reserve(size_t(roi_targets->size() * 1.1)); // TODO: Enable for more performance
-    
-    octomap::KeySet roi = planning_tree->getRoiKeys();
-    octomap::KeySet freeNeighbours;
-    for (const octomap::OcTreeKey &key : roi)
+    // Iterate voxels
+    const voxblox::Block<voxblox::TsdfVoxel>& block = layer->getBlockByIndex(block_index);
+    for (size_t linear_index = 0u; linear_index < num_voxels_per_block; ++linear_index)
     {
-      if (!isInSamplingRegion(planning_tree->keyToCoord(key), sr_min, sr_max)) // ROI not in sampling region
-        continue;
+      const voxblox::TsdfVoxel& voxel = block.getVoxelByLinearIndex(linear_index);
+      const voxblox::Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
+      voxblox::GlobalIndex g_idx = voxblox::getGlobalVoxelIndexFromBlockAndVoxelIndex(block_index, block.computeVoxelIndexFromLinearIndex(linear_index), vps);
 
-      planning_tree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, (octomap_vpp::Neighborhood)neighbor_con );
-    }
-    for (const octomap::OcTreeKey &key : freeNeighbours)
-    {
-      if (planning_tree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, (octomap_vpp::Neighborhood)neighbor_con ))
+      // Roi Target
+      if (!can_skip_roi && voxblox::utils::isObservedVoxel(voxel) && voxel.color.r > 50 && voxel.distance>0) // TODO: constant. Note: voxel.distance>0 means the outer shell of the object surface
       {
-        new_roi_targets->push_back(planning_tree->keyToCoord(key));
-      }
-    }
-    // update roi targets
-    roi_targets = new_roi_targets;
-  }
-
-  if (!can_skip_expl || !can_skip_border)
-  {
-    TargetVPtr new_expl_targets = std::make_shared<TargetV>();
-    //new_expl_targets->reserve(size_t(expl_targets->size() * 1.1)); // TODO: Enable for more performance
-    TargetVPtr new_border_targets = std::make_shared<TargetV>();
-    //new_border_targets->reserve(size_t(border_targets->size() * 1.1)); // TODO: Enable for more performance
-
-    for (auto it = planning_tree->begin_leafs_bbx(sr_min, sr_max), end = planning_tree->end_leafs_bbx(); it != end; it++)
-    {
-      if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
-      {
-        if (planning_tree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
+        MappingKeySet neighbors;
+        computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
+        for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
         {
-          if (planning_tree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
-            new_expl_targets->push_back(it.getCoordinate());
-          else
-            new_border_targets->push_back(it.getCoordinate());
+          const voxblox::TsdfVoxel* neighbor_voxel = layer->getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
+          if (!neighbor_voxel || !voxblox::utils::isObservedVoxel(*neighbor_voxel)) // has unknown neighbor?
+          {
+            new_roi_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+            break;
+          }
         }
       }
-    }
-    // update expl and border targets
-    expl_targets = new_expl_targets;
-    border_targets = new_border_targets;
-  }
-  */
 
+      // Border & Expl
+      if (!(can_skip_border && can_skip_expl) && voxblox::utils::isObservedVoxel(voxel) && voxel.distance>0)
+      {
+        bool has_unknown_neighbor = false;
+        bool has_occupied_neighbor = false;
+        MappingKeySet neighbors;
+        computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
+        for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
+        { // -----------for start
+          const voxblox::TsdfVoxel* neighbor_voxel = layer->getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
+          if (!neighbor_voxel)
+          {
+            has_unknown_neighbor = true;
+            continue;
+          }
+
+          if (voxblox::utils::isObservedVoxel(*neighbor_voxel))
+          {
+            if (neighbor_voxel->distance < 0)
+            {
+              has_occupied_neighbor = true;
+            }
+          }
+          else
+          {
+            has_unknown_neighbor = true;
+          }
+        } // -----------for end
+
+        if (has_unknown_neighbor)
+        {
+          if (has_occupied_neighbor)
+          {
+            new_expl_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+          }
+          else
+          {
+            new_border_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+          }
+        }
+
+      }
+
+      // voxblox::BlockIndex neighbor_b_idx;
+      // voxblox::BlockIndex neighbor_v_idx;
+      // voxblox::getBlockAndVoxelIndexFromGlobalVoxelIndex(toVoxbloxKey(*it), vps, &neighbor_b_idx, &neighbor_v_idx);
+      // const voxblox::Block<voxblox::TsdfVoxel>& neighbor_block = layer->getBlockByIndex(neighbor_b_idx);
+      // const voxblox::Point neighbor_coord = neighbor_block.computeCoordinatesFromVoxelIndex(neighbor_v_idx);
+      // const voxblox::TsdfVoxel neighbor_voxel = neighbor_block.getVoxelByVoxelIndex(neighbor_v_idx);
+      // new_border_targets->push_back(octomap::point3d(neighbor_coord.x(), neighbor_coord.y(), neighbor_coord.z()));
+
+    }
+  }
+
+  roi_targets = new_roi_targets;
+  border_targets = new_border_targets;
+  expl_targets = new_expl_targets;
 }
 
 

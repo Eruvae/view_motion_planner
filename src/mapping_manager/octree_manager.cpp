@@ -53,7 +53,7 @@ OctreeManager::computeRayKeys(const octomap::point3d& origin, const octomap::poi
 
 
 bool 
-OctreeManager::computeNeighborKeys(const MappingKey& point, const NeighborConnectivity connectivity, MappingKeySet& set)
+OctreeManager::computeNeighborKeys(const MappingKey& point, MappingKeySet& set, const NeighborConnectivity connectivity)
 {
   // TODO: add key limit checking?
   for (int i = 0; i < (int)connectivity; i++)

@@ -122,7 +122,7 @@ ModifiedTsdfServer::ModifiedTsdfServer(const ros::NodeHandle& nh,
   // Initialize TSDF Map and integrator.
   tsdf_map_.reset(new TsdfMap(config));
 
-  std::string method("fast"); // TODO
+  std::string method("simple"); // Use "simple" method, or there would be a lot of border targets.
   nh_private_.param("method", method, method);
   if (method.compare("simple") == 0) {
     tsdf_integrator_.reset(new SimpleTsdfIntegrator(
