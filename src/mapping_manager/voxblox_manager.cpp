@@ -1,7 +1,7 @@
 //////////////////////////////////////
 #include <view_motion_planner/mapping_manager/voxblox_manager.h>
 //////////////////////////////////////
-//#include <view_motion_planner/vmp_utils.h> // TODO
+#include <view_motion_planner/vmp_utils.h>
 //#include <octomap_msgs/Octomap.h>
 //#include <octomap_msgs/conversions.h>
 #include <filesystem>
@@ -11,6 +11,7 @@
 #include <minkindr_conversions/kindr_msg.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <pcl_ros/transforms.h>
+
 
 
 namespace view_motion_planner
@@ -258,6 +259,11 @@ VoxbloxManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, 
     {
       const voxblox::TsdfVoxel& voxel = block.getVoxelByLinearIndex(linear_index);
       const voxblox::Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
+
+      octomap::point3d coord_octomap(coord.x(), coord.y(), coord.z());
+      if (!isInSamplingRegion(coord_octomap, sr_min, sr_max))
+        continue;
+
       voxblox::GlobalIndex g_idx = voxblox::getGlobalVoxelIndexFromBlockAndVoxelIndex(block_index, block.computeVoxelIndexFromLinearIndex(linear_index), vps);
 
       // Roi Target
