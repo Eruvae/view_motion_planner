@@ -139,40 +139,35 @@ VoxbloxManager::computeNeighborKeys(const MappingKey& point, MappingKeySet& set,
   return true;
 }
 
-
 MappingNode 
 VoxbloxManager::search(const MappingKey& key)
 {
-  // tree_mtx.lock();
-  // octomap::OcTreeKey key_ = toOcTreeKey(key);
-  // octomap_vpp::RoiOcTreeNode* node_ = planning_tree->search(key_);
-
-  // if (node_ == NULL)
-  // {
-  //   tree_mtx.unlock();
-  //   MappingNode node;
-  //   node.state = UNKNOWN;
-  //   return node;
-  // }
-
+  const voxblox::TsdfVoxel* voxel = tsdf_server->tsdf_map_->getTsdfLayer().getVoxelPtrByGlobalIndex(toVoxbloxKey(key));
   MappingNode node;
-  // node.occ_p = node_->getOccupancy();
-  // node.roi_p = node_->getRoiProb();
 
-  if (node.occ_p < 0.5) // TODO: hardcoded
+  if (!voxel || !voxblox::utils::isObservedVoxel(*voxel))
+  {
+    node.state = UNKNOWN;
+  }
+  else if (voxel->distance > 0)
   {
     node.state = FREE;
+    node.occ_p = 0;
+    node.roi_p = 0;
   }
-  else if (node.roi_p < 0.5) // TODO: hardcoded
-  {
-    node.state = NON_ROI;
-  }
-  else //if (node.roi_p >= 0.5)
+  else if (voxel->color.r > 50)
   {
     node.state = ROI;
+    node.occ_p = 1;
+    node.roi_p = 1;
+  }
+  else
+  {
+    node.state = NON_ROI;
+    node.occ_p = 1;
+    node.roi_p = 0;
   }
 
-  //tree_mtx.unlock();
   return node;
 }
 
