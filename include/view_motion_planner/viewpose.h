@@ -142,7 +142,8 @@ static inline robot_trajectory::RobotTrajectoryPtr getTrajectoryForState(Traject
 static inline ViewposePtr sampleRandomViewPose(TargetType type, 
                                                std::shared_ptr<BaseMappingManager> mapping_manager,
                                                const std::string& map_frame, 
-                                               const std::string& ws_frame, 
+                                               const std::string& ws_frame,
+                                               const std::string& pose_frame,
                                                tf2_ros::Buffer& tfBuffer,
                                                std::shared_ptr<RobotManager>& robot_manager)
 {
@@ -239,7 +240,7 @@ static inline ViewposePtr sampleRandomViewPose(TargetType type,
     return nullptr;
   }*/
 
-  vp->state = robot_manager->getPoseRobotState(transform(vp->pose, map_frame, ws_frame, tfBuffer));
+  vp->state = robot_manager->getPoseRobotState(transform(vp->pose, map_frame, pose_frame, tfBuffer));
   vp->type = type;
 
   if (vp->state == nullptr)

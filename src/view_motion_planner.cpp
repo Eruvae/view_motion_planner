@@ -349,7 +349,7 @@ void ViewMotionPlanner::graphBuilderThread()
 
     //ROS_FATAL("ViewposePtr vp = sampleRandomViewPose(type); !!!!!!");
     //ViewposePtr vp = sampleRandomViewPose(type);
-    ViewposePtr vp = sampleRandomViewPose(type, mapping_manager, map_frame, ws_frame, tfBuffer, robot_manager);
+    ViewposePtr vp = sampleRandomViewPose(type, mapping_manager, map_frame, ws_frame, pose_frame, tfBuffer, robot_manager);
     if (vp)
     {
       boost::unique_lock lock(graph_manager->getGraphMutex());
