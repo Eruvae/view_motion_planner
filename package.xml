@@ -81,6 +81,7 @@
   <depend version_gt="0.3.1">srdfdom</depend>
   <depend>urdf</depend>
   <depend>yaml-cpp</depend>
+  <depend>trolley_simulation</depend>
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- Other tools can request additional information be placed here -->

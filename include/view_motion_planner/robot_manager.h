@@ -27,6 +27,7 @@ private:
 
   boost::mutex manipulator_group_mtx;
 
+  std::string home_pose;
   const std::string pose_reference_frame;
   const std::string end_effector_link;
   std::vector<double> joint_start_values;
@@ -83,6 +84,10 @@ public:
   bool moveToRandomTarget(bool async=false, const ros::Duration &timeout=ros::Duration(60));
   bool moveToNamedPose(const std::string &pose_name, bool async=false);
   bool moveToHomePose(bool async=false);
+
+  void setHomePoseName(const std::string &name);
+  std::string getHomePoseName();
+  void flipHomePose();
 
   bool executeTrajectory(const robot_trajectory::RobotTrajectoryPtr &traj);
 };

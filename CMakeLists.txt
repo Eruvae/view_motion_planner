@@ -38,6 +38,7 @@ set (CATKIN_DEPENDENCIES
     voxblox_msgs
     rviz_visual_tools
     pcl_conversions
+    trolley_simulation
 )
 
 ## Find catkin macros and libraries
@@ -177,7 +178,6 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/view_motion_planner.cpp
   src/robot_manager.cpp
   src/viewpose_graph.cpp
-  src/trolley_remote.cpp
   src/voxblox_tsdf_server.cpp
   src/mapping_manager/octree_manager.cpp
   src/mapping_manager/voxblox_manager.cpp

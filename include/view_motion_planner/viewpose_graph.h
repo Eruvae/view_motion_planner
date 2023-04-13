@@ -46,6 +46,10 @@ public:
 class ViewposeGraphManager
 {
 private:
+  const std::string map_frame;
+  const std::string ws_frame;
+  const std::string pose_frame;
+
   ViewposeGraph graph;
 
   boost::shared_mutex graph_mtx;
@@ -70,10 +74,14 @@ private:
 
   ValueHeap priorityQueue;
 
+  ros::Publisher viewArrowVisPub;
+  ros::Publisher poseArrayPub;
+
 public:
   ViewposeGraphManager(const std::shared_ptr<RobotManager> &robot_manager,
                        const std::shared_ptr<BaseMappingManager> &mapping_manager,
-                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph);
+                       const rviz_visual_tools::RvizVisualToolsPtr &vt_searched_graph,
+                       const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame);
 
   double getVertexDistancePose(ViewposePtr a, ViewposePtr b);
   double getVertexDistanceJoints(ViewposePtr a, ViewposePtr b);
@@ -129,6 +137,8 @@ public:
   }
 
   size_t connectNeighbors(const Vertex &v, size_t num_neighbors, double max_traj_length, double traj_step = 0.1);
+
+  void publishViewposeVisualizations(const std::vector<ViewposePtr> &vps);
 
   void visualizeGraph(bool visualize_expanded, bool visualize_unexpanded);
 

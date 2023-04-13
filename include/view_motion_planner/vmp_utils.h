@@ -267,7 +267,7 @@ PointT transform(const PointT &p, const std::string &from, const std::string &to
  * found in: https://blog.selfshadow.com/2011/10/17/perp-vectors/
 */
 static inline tf2::Vector3 getPerpVectorStark(const tf2::Vector3 &u)
- {
+{
   tf2::Vector3 a = u.absolute();
   bool uyx = std::signbit(a.x() - a.y());
   bool uzx = std::signbit(a.x() - a.z());
@@ -297,7 +297,7 @@ octomap::point3d sampleRandomViewpoint(const octomap::point3d &target, double mi
   std::uniform_real_distribution<double> z_dist(-1, 1);
   std::uniform_real_distribution<double> theta_dist(-M_PI, M_PI);
   double z = z_dist(engine);
-  double theta = z_dist(engine);
+  double theta = theta_dist(engine);
   double x = std::sin(theta)*std::sqrt(1 - z*z);
   double y = std::cos(theta)*std::sqrt(1 - z*z);
   octomap::point3d p(x, y, z);
