@@ -124,13 +124,13 @@ bool updateWsAndSrMarker(std_srvs::Empty::Request &req, std_srvs::Empty::Respons
 
 bool startEvaluator(roi_viewpoint_planner_msgs::StartEvaluator::Request &req, roi_viewpoint_planner_msgs::StartEvaluator::Response &res)
 {
-  if (req.episode_end_param >= static_cast<uint8_t>(EvalEpisodeEndParam::NUM_EPEND_PARAMS))
+  if (req.episode_end_param >= static_cast<uint8_t>(rvp_evaluation::EvalEpisodeEndParam::NUM_EPEND_PARAMS))
   {
     res.success = false;
   }
   else
   {
-    EvalEpisodeEndParam epEndParam = static_cast<EvalEpisodeEndParam>(req.episode_end_param);
+    rvp_evaluation::EvalEpisodeEndParam epEndParam = static_cast<rvp_evaluation::EvalEpisodeEndParam>(req.episode_end_param);
     res.success = planner->startEvaluator(req.num_evals, epEndParam, req.episode_duration, req.starting_index,
                   req.randomize_plants, octomap_vpp::pointToOctomath(req.min_point), octomap_vpp::pointToOctomath(req.max_point), req.min_dist, req.with_trolley);
   }

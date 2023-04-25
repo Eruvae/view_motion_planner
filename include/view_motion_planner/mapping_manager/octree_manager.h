@@ -42,6 +42,7 @@ public:
   TargetVConstPtr getRoiTargets();
   TargetVConstPtr getExplTargets();
   TargetVConstPtr getBorderTargets();
+  std::shared_ptr<rvp_evaluation::OctreeProviderInterface> getMapProvider() override;
   // IO
   bool saveToFile(const std::string &filename, bool overwrite);
   int loadFromFile(const std::string &filename, const geometry_msgs::Transform &offset);

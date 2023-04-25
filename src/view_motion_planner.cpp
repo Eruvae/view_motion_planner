@@ -33,6 +33,13 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
   //mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
   mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, tree_resolution));
 
+  rvp_evaluation::EvaluatorType active_evaluators = rvp_evaluation::EvaluatorType::EXTERNAL_CLUSTER_EVALUATOR;
+  if (mapping_manager->getMapProvider())
+  {
+    active_evaluators = active_evaluators | rvp_evaluation::EvaluatorType::OCTREE_EVALUATOR_OLD | rvp_evaluation::EvaluatorType::OCTREE_EVALUATOR_NEW;
+  }
+  eval_manager.reset(new rvp_evaluation::EvaluationManager(active_evaluators, tree_resolution, mapping_manager->getMapProvider()));
+
   graph_manager.reset(new ViewposeGraphManager(robot_manager, mapping_manager, vt_searched_graph, map_frame, ws_frame, pose_frame));
 
   // TODO: maybe move into the mapping manager
@@ -508,7 +515,7 @@ bool ViewMotionPlanner::executePath()
   return moved;
 }
 
-void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double duration)
+void ViewMotionPlanner::pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam ep, double duration)
 {
   /*bool start_connected = */buildGraph();
 
@@ -531,9 +538,9 @@ void ViewMotionPlanner::pathSearcherThread(EvalEpisodeEndParam ep, double durati
       waitForPointcloudWithRoi();
 
     // TODO: Rework
-    // if ( (ep == EvalEpisodeEndParam::TIME && mapping_manager->getEvalPassedTime() > duration) ||
-    //      (ep == EvalEpisodeEndParam::PLAN_DURATION && mapping_manager->getEvalAccPlanDuration() > duration) ||
-    //      (ep == EvalEpisodeEndParam::PLAN_LENGTH && mapping_manager->getEvalAccPlanLength() > duration)
+    // if ( (ep == rvp_evaluation::EvalEpisodeEndParam::TIME && mapping_manager->getEvalPassedTime() > duration) ||
+    //      (ep == rvp_evaluation::EvalEpisodeEndParam::PLAN_DURATION && mapping_manager->getEvalAccPlanDuration() > duration) ||
+    //      (ep == rvp_evaluation::EvalEpisodeEndParam::PLAN_LENGTH && mapping_manager->getEvalAccPlanLength() > duration)
     //    )
     // {
     //   break;
@@ -614,7 +621,7 @@ void ViewMotionPlanner::exploreNamedPoses()
   }
 }
 
-bool ViewMotionPlanner::startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
+bool ViewMotionPlanner::startEvaluator(size_t numEvals, rvp_evaluation::EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
                     bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,
                     bool with_trolley)
 {
@@ -786,10 +793,10 @@ void ViewMotionPlanner::plannerLoop()
         pathSearcherThread(ros::Time::now() + ros::Duration(config.trolley_time_per_segment));
         break;
       case Vmp_PLAN_DURATION:
-        pathSearcherThread(EvalEpisodeEndParam::PLAN_DURATION, (1 + eval_current_segment) * config.trolley_time_per_segment);
+        pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam::PLAN_DURATION, (1 + eval_current_segment) * config.trolley_time_per_segment);
         break;
       case Vmp_PLAN_LENGTH:
-        pathSearcherThread(EvalEpisodeEndParam::PLAN_LENGTH,  (1 + eval_current_segment) * config.trolley_time_per_segment);
+        pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam::PLAN_LENGTH,  (1 + eval_current_segment) * config.trolley_time_per_segment);
         break;
       default:
         ROS_ERROR_STREAM("Invalid trolley segment end param: " << config.trolley_segment_end_param);

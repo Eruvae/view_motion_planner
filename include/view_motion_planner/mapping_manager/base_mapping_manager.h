@@ -11,6 +11,11 @@
 
 // NOTE: Keep this file as simple as possible to prevent tangled implementations
 
+namespace rvp_evaluation
+{
+class OctreeProviderInterface;
+}
+
 namespace view_motion_planner
 {
 
@@ -101,6 +106,10 @@ public:
   //         The method is depends on the map type and the results should be used for debugging/visualization purposes.
   //         Published topic must be in the private namespace.
   virtual void publishMap() = 0;
+
+  /// @brief Returns a map provider that can be used for evaluation.
+  /// @return If implemented, returns a map provider. Otherwise, returns nullptr.
+  virtual std::shared_ptr<rvp_evaluation::OctreeProviderInterface> getMapProvider() { return nullptr; }
 
 };
 

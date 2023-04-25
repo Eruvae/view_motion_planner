@@ -17,6 +17,8 @@
 #include "view_motion_planner/mapping_manager/octree_manager.h"
 #include "view_motion_planner/mapping_manager/voxblox_manager.h"
 
+#include <rvp_evaluation/evaluation_manager.h>
+
 #include "trolley_simulation/trolley_remote.h"
 
 namespace view_motion_planner
@@ -165,7 +167,7 @@ public:
 
   bool executePath();
 
-  void pathSearcherThread(EvalEpisodeEndParam ep, double duration);
+  void pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam ep, double duration);
 
   void pathSearcherThread(const ros::Time &end_time = ros::TIME_MAX);
 
@@ -179,7 +181,7 @@ public:
 
   void exploreNamedPoses();
 
-  bool startEvaluator(size_t numEvals, EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
+  bool startEvaluator(size_t numEvals, rvp_evaluation::EvalEpisodeEndParam episodeEndParam, double episodeDuration, int start_index,
                       bool randomize_plants, const octomap::point3d &min, const octomap::point3d &max, double min_dist,
                       bool with_trolley);
 
@@ -225,13 +227,15 @@ private:
 
   bool update_planning_tree;
 
+  std::shared_ptr<rvp_evaluation::EvaluationManager> eval_manager;
+
   bool eval_initialized;
   std::atomic_bool eval_start;
   std::atomic_bool eval_running;
   size_t eval_current_episode;
   bool eval_with_trolley;
   size_t eval_num_episodes;
-  EvalEpisodeEndParam eval_epend_param;
+  rvp_evaluation::EvalEpisodeEndParam eval_epend_param;
   double eval_episode_duration;
   size_t eval_current_segment;
 

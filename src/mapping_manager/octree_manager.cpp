@@ -2,6 +2,7 @@
 #include <view_motion_planner/mapping_manager/octree_manager.h>
 //////////////////////////////////////
 #include <view_motion_planner/vmp_utils.h> // moveOctomap
+#include <rvp_evaluation/octree_provider_interfaces/provided_tree_interface.h>
 #include <octomap_msgs/Octomap.h>
 #include <octomap_msgs/conversions.h>
 #include <filesystem>
@@ -220,6 +221,12 @@ OctreeManager::getBorderTargets()
   return tmp;
 }
 
+std::shared_ptr<rvp_evaluation::OctreeProviderInterface>
+OctreeManager::getMapProvider()
+{
+  std::shared_ptr<rvp_evaluation::ProvidedTreeInterface> interface(new rvp_evaluation::ProvidedTreeInterface(planning_tree, tree_mtx));
+  return interface;
+}
 
 bool 
 OctreeManager::saveToFile(const std::string &filename, bool overwrite)
