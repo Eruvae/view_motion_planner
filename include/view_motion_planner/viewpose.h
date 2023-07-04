@@ -152,21 +152,26 @@ static inline ViewposePtr sampleRandomViewPose(TargetType type,
   if (type == TARGET_ROI)
   {
     auto roi_targets = mapping_manager->getRoiTargets();
-    sample_target_success = getRandomTarget(*roi_targets, origin);
+    if (roi_targets)
+      sample_target_success = getRandomTarget(*roi_targets, origin);
+
     if (!sample_target_success)
       type = TARGET_OCC;
   }
   if (type == TARGET_OCC)
   {
     auto expl_targets = mapping_manager->getExplTargets();
-    sample_target_success = getRandomTarget(*expl_targets, origin);
+    if (expl_targets)
+      sample_target_success = getRandomTarget(*expl_targets, origin);
+
     if (!sample_target_success)
       type = TARGET_BORDER;
   }
   if (type == TARGET_BORDER)
   {
     auto border_targets = mapping_manager->getBorderTargets();
-    sample_target_success = getRandomTarget(*border_targets, origin);
+    if (border_targets)
+      sample_target_success = getRandomTarget(*border_targets, origin);
   }
   if (!sample_target_success)
   {
