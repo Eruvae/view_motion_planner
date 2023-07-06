@@ -140,7 +140,7 @@ public:
 class ViewMotionPlanner
 {
 public:
-  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
+  ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_type,
                     const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
                     const std::string &robot_description_param_name, const std::string &group_name, const std::string &ee_link_name,
                     double tree_resolution, size_t graph_builder_threads, bool update_planning_tree=true, bool initialize_evaluator=false);

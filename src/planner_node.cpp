@@ -162,10 +162,12 @@ int main(int argc, char **argv)
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
   bool initialize_evaluator = nhp.param<bool>("evaluate", true);
 
+  std::string map_type = nhp.param<std::string>("map_type", "octomap");
+
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  planner = new ViewMotionPlanner(nh, tfBuffer, map_frame, ws_frame, pose_frame,
+  planner = new ViewMotionPlanner(nh, tfBuffer, map_type, map_frame, ws_frame, pose_frame,
                                   robot_description_param_name, group_name, ee_link_name,
                                   tree_resolution, num_graph_builder_threads,
                                   update_planning_tree, initialize_evaluator);

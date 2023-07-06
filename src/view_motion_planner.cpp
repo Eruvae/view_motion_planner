@@ -6,7 +6,7 @@
 namespace view_motion_planner
 {
 
-ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
+ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_type,
                                      const std::string &map_frame, const std::string &ws_frame, const std::string &pose_frame,
                                      const std::string &robot_description_param_name, const std::string &group_name, const std::string &ee_link_name,
                                      double tree_resolution, size_t graph_builder_threads, bool update_planning_tree, bool initialize_evaluator)
@@ -29,9 +29,22 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
     vt_robot_state(new moveit_visual_tools::MoveItVisualTools(map_frame, "vm_robot_state", robot_manager->getPlanningSceneMonitor())),
     trolley_remote(ros::NodeHandle(), ros::NodeHandle("/trollomatic"))
 {
-  //mapping_manager.reset(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, initialize_evaluator));
-  //mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
-  mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, tree_resolution));
+  if (map_type == "octomap")
+  {
+    ROS_INFO_STREAM("Using octomap map manager");
+    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
+    //mapping_manager.reset(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, initialize_evaluator));
+  }
+  else if (map_type == "voxblox")
+  {
+    ROS_INFO_STREAM("Using voxblox map manager");
+    mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, tree_resolution));
+  }
+  else
+  {
+    ROS_WARN_STREAM("Unknown map type: " << map_type << ", defaulting to octomap");
+    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
+  }
 
   rvp_evaluation::EvaluatorType active_evaluators = rvp_evaluation::EvaluatorType::EXTERNAL_CLUSTER_EVALUATOR;
   if (mapping_manager->getMapProvider())

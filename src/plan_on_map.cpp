@@ -65,6 +65,8 @@ int main(int argc, char **argv)
   std::string group_name = nh.param<std::string>("/roi_viewpoint_planner/group_name", "manipulator");
   std::string ee_link_name = nh.param<std::string>("/roi_viewpoint_planner/ee_link_name", "camera_link");
 
+  std::string map_type = nhp.param<std::string>("map_type", "octomap");
+
   constexpr bool NO_PLANNING_TREE_UPDATE = false;
 
   size_t num_graph_builder_threads = static_cast<size_t>(nhp.param<int>("graph_builder_threads", 4));
@@ -76,7 +78,7 @@ int main(int argc, char **argv)
   ros::Publisher tjs_pub = nh.advertise<sensor_msgs::JointState>("trolley_joint_states", 1);
   ros::Publisher ajs_pub = nh.advertise<sensor_msgs::JointState>("joint_states", 1);
 
-  ViewMotionPlanner planner(nh, tfBuffer, map_frame, ws_frame, pose_frame,
+  ViewMotionPlanner planner(nh, tfBuffer, map_type, map_frame, ws_frame, pose_frame,
                             robot_description_param_name, group_name, ee_link_name,
                             tree_resolution, num_graph_builder_threads,
                             NO_PLANNING_TREE_UPDATE, initialize_evaluator);
