@@ -74,6 +74,8 @@
   <depend>voxblox</depend>
   <depend>voxblox_ros</depend>
   <depend>voxblox_msgs</depend>
+  <depend>panoptic_mapping</depend>
+  <depend>panoptic_mapping_ros</depend>
   <depend>rviz_visual_tools</depend>
   <depend>pcl_conversions</depend>
 

@@ -36,6 +36,8 @@ set (CATKIN_DEPENDENCIES
     voxblox
     voxblox_ros
     voxblox_msgs
+    panoptic_mapping
+    panoptic_mapping_ros
     rviz_visual_tools
     pcl_conversions
     trolley_simulation
@@ -181,6 +183,7 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/voxblox_tsdf_server.cpp
   src/mapping_manager/octree_manager.cpp
   src/mapping_manager/voxblox_manager.cpp
+  src/mapping_manager/panoptic_manager.cpp
 )
 
 ## Declare a C++ library
