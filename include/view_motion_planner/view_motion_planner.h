@@ -14,8 +14,7 @@
 #include "view_motion_planner/viewpose_graph.h"
 #include "view_motion_planner/vmp_utils.h"
 
-#include "view_motion_planner/mapping_manager/octree_manager.h"
-#include "view_motion_planner/mapping_manager/voxblox_manager.h"
+#include "view_motion_planner/mapping_manager/base_mapping_manager.h"
 
 #include <rvp_evaluation/evaluation_manager.h>
 

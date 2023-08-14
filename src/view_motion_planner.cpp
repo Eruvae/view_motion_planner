@@ -2,6 +2,9 @@
 #include <boost/graph/connected_components.hpp>
 #include <boost/graph/incremental_components.hpp>
 #include <octomap_ros/conversions.h>
+#include "view_motion_planner/mapping_manager/octree_manager.h"
+#include "view_motion_planner/mapping_manager/voxblox_manager.h"
+#include "view_motion_planner/mapping_manager/panoptic_manager.h"
 
 namespace view_motion_planner
 {
@@ -39,6 +42,11 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
   {
     ROS_INFO_STREAM("Using voxblox map manager");
     mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, tree_resolution));
+  }
+  else if (map_type == "panoptic")
+  {
+    ROS_INFO_STREAM("Using panoptic map manager");
+    mapping_manager.reset(new PanopticManager(nh, priv_nh_, map_frame, tree_resolution));
   }
   else
   {

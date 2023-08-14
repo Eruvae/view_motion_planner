@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+
+  <arg name="debug" default="false" />
+  <arg unless="$(arg debug)" name="launch_prefix" value="" />
+  <arg if="$(arg debug)" name="launch_prefix" value="gdb -ex run --args" />
+
+  <node launch-prefix="$(arg launch_prefix)" name="view_motion_planner" type="planner_node" pkg="view_motion_planner"  output="screen">
+    <param name="map_type" value="panoptic"/>
+    <rosparam file="$(find panoptic_mapping_ros)/config/mapper/sweetpepper.yaml"/>
+    <param name="labels/file_name" value="$(find panoptic_mapping_ros)/config/mapper/sweetpepper_labels.csv"/>
+     
+    <!-- Input -->
+    <remap from="color_image_in" to="/camera/color/image_raw"/>
+    <remap from="depth_image_in" to="/camera/depth/image_raw"/>
+    <remap from="segmentation_image_in" to="/camera/segmentation_image"/>
+    <remap from="labels_in" to="/camera/segmentation_labels"/>
+  </node>
+</launch>

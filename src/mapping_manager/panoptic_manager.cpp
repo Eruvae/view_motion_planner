@@ -128,7 +128,7 @@ bool
 PanopticManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
 {
   ROS_WARN("Not implemented");
-  return false;
+  return true;
 
   //TODO: this might not make sense to have, as panoptic mapper is supposed to have multiple classes
 
@@ -159,97 +159,116 @@ PanopticManager::updateTargets(octomap::point3d sr_min, octomap::point3d sr_max,
   // Iterate all allocated blocks
 
   // TODO: which ID to use? Loop through all IDs to identify class?
-  size_t id = panoptic_mapper->getSubmapCollection().getActiveFreeSpaceSubmapID();
-  const panoptic_mapping::Submap &submap = panoptic_mapper->getSubmapCollection().getSubmap(id);
-  const auto &layer = submap.getTsdfLayer();
-  size_t vps = layer.voxels_per_side();
-  size_t num_voxels_per_block = vps * vps * vps;
-  voxblox::BlockIndexList block_list;
-  layer.getAllAllocatedBlocks(&block_list);
-  for (const voxblox::BlockIndex& block_index : block_list)
+  const panoptic_mapping::SubmapCollection &submaps = panoptic_mapper->getThreadSafeSubmapCollection().getSubmaps();
+  for (const panoptic_mapping::Submap &submap : submaps)
   {
-    // Iterate voxels
-    const voxblox::Block<voxblox::TsdfVoxel>& block = layer.getBlockByIndex(block_index);
-    for (size_t linear_index = 0u; linear_index < num_voxels_per_block; ++linear_index)
+    //LabelEntry
+    //submap.getClassID();
+    panoptic_mapping::LabelEntry entry;
+    bool success = panoptic_mapper->getLabelHandler().getLabelEntryIfExists(submap.getClassID(), &entry);
+    if (!success)
     {
-      const voxblox::TsdfVoxel& voxel = block.getVoxelByLinearIndex(linear_index);
-      const voxblox::Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
+      ROS_WARN_STREAM("No entry for class ID " << submap.getClassID());
+      continue;
+    }
+    ROS_INFO_STREAM("Entry: " << entry.toString());
+    bool is_roi_submap = (entry.name == "pepper");
 
-      octomap::point3d coord_octomap(coord.x(), coord.y(), coord.z());
-      if (!isInSamplingRegion(coord_octomap, sr_min, sr_max))
-        continue;
-
-      voxblox::GlobalIndex g_idx = voxblox::getGlobalVoxelIndexFromBlockAndVoxelIndex(block_index, block.computeVoxelIndexFromLinearIndex(linear_index), vps);
-
-      // Roi Target
-      if (!can_skip_roi && voxblox::utils::isObservedVoxel(voxel) && voxel.color.r > 50 && voxel.distance>0) // TODO: constant. Note: voxel.distance>0 means the outer shell of the object surface
+    const auto &layer = submap.getTsdfLayer();
+    size_t vps = layer.voxels_per_side();
+    size_t num_voxels_per_block = vps * vps * vps;
+    voxblox::BlockIndexList block_list;
+    layer.getAllAllocatedBlocks(&block_list);
+    for (const voxblox::BlockIndex& block_index : block_list)
+    {
+      // Iterate voxels
+      const voxblox::Block<voxblox::TsdfVoxel>& block = layer.getBlockByIndex(block_index);
+      for (size_t linear_index = 0u; linear_index < num_voxels_per_block; ++linear_index)
       {
-        MappingKeySet neighbors;
-        computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
-        for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
+        const voxblox::TsdfVoxel& voxel = block.getVoxelByLinearIndex(linear_index);
+        const voxblox::Point coord = block.computeCoordinatesFromLinearIndex(linear_index);
+
+        octomap::point3d coord_octomap(coord.x(), coord.y(), coord.z());
+        if (!isInSamplingRegion(coord_octomap, sr_min, sr_max))
+          continue;
+
+        voxblox::GlobalIndex g_idx = voxblox::getGlobalVoxelIndexFromBlockAndVoxelIndex(block_index, block.computeVoxelIndexFromLinearIndex(linear_index), vps);
+
+        // Roi Target
+        if (is_roi_submap && !can_skip_roi && voxblox::utils::isObservedVoxel(voxel) && voxel.distance>0) // TODO: constant. Note: voxel.distance>0 means the outer shell of the object surface
         {
-          const voxblox::TsdfVoxel* neighbor_voxel = layer.getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
-          if (!neighbor_voxel || !voxblox::utils::isObservedVoxel(*neighbor_voxel)) // has unknown neighbor?
+          MappingKeySet neighbors;
+          computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
+          for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
           {
-            new_roi_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
-            break;
-          }
-        }
-      }
-
-      // Border & Expl
-      if (!(can_skip_border && can_skip_expl) && voxblox::utils::isObservedVoxel(voxel) && voxel.distance>0)
-      {
-        bool has_unknown_neighbor = false;
-        bool has_occupied_neighbor = false;
-        MappingKeySet neighbors;
-        computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
-        for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
-        { // -----------for start
-          const voxblox::TsdfVoxel* neighbor_voxel = layer.getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
-          if (!neighbor_voxel)
-          {
-            has_unknown_neighbor = true;
-            continue;
-          }
-
-          if (voxblox::utils::isObservedVoxel(*neighbor_voxel))
-          {
-            if (neighbor_voxel->distance < 0)
+            const voxblox::TsdfVoxel* neighbor_voxel = layer.getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
+            if (!neighbor_voxel || !voxblox::utils::isObservedVoxel(*neighbor_voxel)) // has unknown neighbor?
             {
-              has_occupied_neighbor = true;
+              new_roi_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+              break;
             }
           }
-          else
-          {
-            has_unknown_neighbor = true;
-          }
-        } // -----------for end
-
-        if (has_unknown_neighbor)
-        {
-          if (has_occupied_neighbor)
-          {
-            new_expl_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
-          }
-          else
-          {
-            new_border_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
-          }
         }
 
+        // Border & Expl
+        if (!is_roi_submap && !(can_skip_border && can_skip_expl) && voxblox::utils::isObservedVoxel(voxel) && voxel.distance>0)
+        {
+          bool has_unknown_neighbor = false;
+          bool has_occupied_neighbor = false;
+          MappingKeySet neighbors;
+          computeNeighborKeys(MappingKey(g_idx.x(), g_idx.y(), g_idx.z()), neighbors, neighbor_con);
+          for (auto it = neighbors.begin(); it != neighbors.end(); ++it)
+          { // -----------for start
+            const voxblox::TsdfVoxel* neighbor_voxel = layer.getVoxelPtrByGlobalIndex(toVoxbloxKey(*it));
+            if (!neighbor_voxel)
+            {
+              has_unknown_neighbor = true;
+              continue;
+            }
+
+            if (voxblox::utils::isObservedVoxel(*neighbor_voxel))
+            {
+              if (neighbor_voxel->distance < 0)
+              {
+                has_occupied_neighbor = true;
+              }
+            }
+            else
+            {
+              has_unknown_neighbor = true;
+            }
+          } // -----------for end
+
+          if (has_unknown_neighbor)
+          {
+            if (has_occupied_neighbor)
+            {
+              new_expl_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+            }
+            else
+            {
+              new_border_targets->push_back(octomap::point3d(coord.x(), coord.y(), coord.z()));
+            }
+          }
+
+        }
+
+        // voxblox::BlockIndex neighbor_b_idx;
+        // voxblox::BlockIndex neighbor_v_idx;
+        // voxblox::getBlockAndVoxelIndexFromGlobalVoxelIndex(toVoxbloxKey(*it), vps, &neighbor_b_idx, &neighbor_v_idx);
+        // const voxblox::Block<voxblox::TsdfVoxel>& neighbor_block = layer->getBlockByIndex(neighbor_b_idx);
+        // const voxblox::Point neighbor_coord = neighbor_block.computeCoordinatesFromVoxelIndex(neighbor_v_idx);
+        // const voxblox::TsdfVoxel neighbor_voxel = neighbor_block.getVoxelByVoxelIndex(neighbor_v_idx);
+        // new_border_targets->push_back(octomap::point3d(neighbor_coord.x(), neighbor_coord.y(), neighbor_coord.z()));
+
       }
-
-      // voxblox::BlockIndex neighbor_b_idx;
-      // voxblox::BlockIndex neighbor_v_idx;
-      // voxblox::getBlockAndVoxelIndexFromGlobalVoxelIndex(toVoxbloxKey(*it), vps, &neighbor_b_idx, &neighbor_v_idx);
-      // const voxblox::Block<voxblox::TsdfVoxel>& neighbor_block = layer->getBlockByIndex(neighbor_b_idx);
-      // const voxblox::Point neighbor_coord = neighbor_block.computeCoordinatesFromVoxelIndex(neighbor_v_idx);
-      // const voxblox::TsdfVoxel neighbor_voxel = neighbor_block.getVoxelByVoxelIndex(neighbor_v_idx);
-      // new_border_targets->push_back(octomap::point3d(neighbor_coord.x(), neighbor_coord.y(), neighbor_coord.z()));
-
     }
+
   }
+
+  size_t id = panoptic_mapper->getThreadSafeSubmapCollection().getSubmaps().getActiveFreeSpaceSubmapID();
+  const panoptic_mapping::Submap &submap = panoptic_mapper->getThreadSafeSubmapCollection().getSubmaps().getSubmap(id);
+  
 
   roi_targets = new_roi_targets;
   border_targets = new_border_targets;
