@@ -8,6 +8,9 @@
 #include <octomap/octomap_types.h> // octomap::point3d, octomap::pose6d
 #include <view_motion_planner/mapping_manager/mapping_key.h>
 #include <view_motion_planner/mapping_manager/mapping_node.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <tf2_ros/buffer.h>
 
 // NOTE: Keep this file as simple as possible to prevent tangled implementations
 
@@ -31,8 +34,32 @@ typedef std::shared_ptr<TargetV> TargetVPtr;
 typedef std::shared_ptr<const TargetV> TargetVConstPtr;
 
 class BaseMappingManager {
+protected:
+  ros::NodeHandle &nh;
+  ros::NodeHandle &priv_nh;
+
+  const std::string map_frame;
+  const std::string ws_frame;
+  tf2_ros::Buffer &tfBuffer;
+
+  ros::Publisher roi_targets_pub;
+  ros::Publisher expl_targets_pub;
+  ros::Publisher border_targets_pub;
+
 public:
 //////////////////////////////////////// MAP ACCESS/MODIFICATION //////////////////////////////////////////////
+
+  /// @brief Constructor
+  /// @param map_frame The frame_id of the map
+  /// @param ws_frame The frame_id of the workspace
+  /// @param tfBuffer tf2_ros::Buffer for tf lookups
+  BaseMappingManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer)
+    : nh(nh), priv_nh(priv_nh), map_frame(map_frame), ws_frame(ws_frame), tfBuffer(tfBuffer)
+  {
+    roi_targets_pub = priv_nh.advertise<sensor_msgs::PointCloud2>("roi_targets", 1);
+    expl_targets_pub = priv_nh.advertise<sensor_msgs::PointCloud2>("expl_targets", 1);
+    border_targets_pub = priv_nh.advertise<sensor_msgs::PointCloud2>("border_targets", 1);
+  }
 
   /// @brief Resets the mapping information. Other information (e.g. frame_id) remains the same.
   virtual void resetMap() = 0;
@@ -66,6 +93,12 @@ public:
   /// @param pc_transform If the transformation is not identity, then this transform is applied to the pointcloud before registering to the map.
   /// @return True, on success. False, on failure (e.g. pointcloud is outside of the map, no points given, tf error, etc.)
   virtual bool registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform) = 0;
+
+  virtual void updateMap(double max_wait = 2.0);
+
+  void computePoseObservedCells(const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells);
+
+  bool computeRayNodes(const octomap::point3d& origin, const octomap::point3d& end, std::vector<MappingNode> &nodes);
 
   /// @brief Updates roi, expl, and border targets. These targets can be get via getRoiTargets(), getExplTargets(), and getBorderTargets()
   /// @param sr_min Sampling region min in the mapping frame

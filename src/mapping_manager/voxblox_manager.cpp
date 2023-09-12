@@ -18,7 +18,8 @@ namespace view_motion_planner
 {
 
 
-VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution), inv_resolution(1.0/resolution)
+VoxbloxManager::VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer, double resolution)
+  : BaseMappingManager(nh, priv_nh, map_frame, ws_frame, tfBuffer), resolution(resolution), inv_resolution(1.0/resolution)
 {
   voxblox::TsdfMap::Config config = voxblox::getTsdfMapConfigFromRosParam(priv_nh);
   voxblox::TsdfIntegratorBase::Config integrator_config = voxblox::getTsdfIntegratorConfigFromRosParam(priv_nh);

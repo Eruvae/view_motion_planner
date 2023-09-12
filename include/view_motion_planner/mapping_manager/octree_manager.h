@@ -14,9 +14,6 @@ namespace view_motion_planner
 class OctreeManager: public BaseMappingManager
 {
 private:
-  ros::NodeHandle nh;
-  ros::NodeHandle priv_nh;
-  std::string map_frame;
   double resolution;
   ros::Publisher octomap_pub;
   std::recursive_mutex targets_mtx; // lock before updating or exposing target shared_ptr's because shared_ptr modification is not atomic!
@@ -28,7 +25,7 @@ private:
   std::shared_ptr<octomap_vpp::RoiOcTree> planning_tree;
 
 public:
-  OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);
+  OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer, double resolution);
 
   ////////////// Pure abstract methods from BaseMappingManager /////////////
   // MAP ACCESS/MODIFICATION

@@ -190,8 +190,6 @@ public:
 
   void plannerLoop();
 
-  void waitForPointcloudWithRoi(double max_wait = 2.0);
-
   //bool plannerLoopOnce(); // returns true if moved
 
   RobotManager* getRobotManager()
@@ -243,9 +241,6 @@ private:
   void reconfigureCallback(VmpConfig &new_config, uint32_t level);
 
   // For visualizing things in rviz
-  ros::Publisher roi_targets_pub;
-  ros::Publisher expl_targets_pub;
-  ros::Publisher border_targets_pub;
   rviz_visual_tools::RvizVisualToolsPtr vt_graph;
   rviz_visual_tools::RvizVisualToolsPtr vt_searched_graph;
   ros::Publisher workspacePub;

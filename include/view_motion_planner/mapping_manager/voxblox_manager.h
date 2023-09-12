@@ -32,7 +32,7 @@ private:
   bool tsdf_initialized = false;
 
 public:
-  VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);
+  VoxbloxManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer, double resolution);
 
   ////////////// Pure abstract methods from BaseMappingManager /////////////
   // MAP ACCESS/MODIFICATION

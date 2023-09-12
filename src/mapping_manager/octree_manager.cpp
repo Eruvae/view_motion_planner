@@ -11,7 +11,8 @@ namespace view_motion_planner
 {
 
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution): nh(nh), priv_nh(priv_nh), map_frame(map_frame), resolution(resolution)
+OctreeManager::OctreeManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer, double resolution)
+  : BaseMappingManager(nh, priv_nh, map_frame, ws_frame, tfBuffer), resolution(resolution)
 {
   planning_tree.reset(new octomap_vpp::RoiOcTree(resolution));
   octomap_pub = priv_nh.advertise<octomap_msgs::Octomap>("vis_octomap", 1);
@@ -124,6 +125,7 @@ OctreeManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWi
   planning_tree->insertRegionScan(inlierCloud, outlierCloud);
   ROS_INFO_STREAM("Inserting took " << (ros::Time::now() - insert_time_start) << " s");
   tree_mtx.unlock();
+  publishMap();
   return true;
 }
 

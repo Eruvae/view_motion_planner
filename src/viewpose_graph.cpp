@@ -354,7 +354,7 @@ bool ViewposeGraphManager::expand()
     }
     target->addPredecessor(vp, t);
     if (!target->visited) // don't compute new cells for already visited targets
-      computePoseObservedCells(mapping_manager, octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
+      mapping_manager->computePoseObservedCells(octomap_vpp::poseToOctomath(target->pose), target->freeCells, target->occCells, target->unkCells);
 
     target->computeUtility();
     if (!highest_ig_pose || target->accumulated_infogain > highest_ig_pose->accumulated_infogain)

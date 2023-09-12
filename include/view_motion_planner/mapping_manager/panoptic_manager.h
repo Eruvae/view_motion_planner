@@ -25,7 +25,7 @@ private:
   std::shared_ptr<panoptic_mapping::PanopticMapper> panoptic_mapper;
 
 public:
-  PanopticManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, double resolution);
+  PanopticManager(ros::NodeHandle &nh, ros::NodeHandle &priv_nh, const std::string& map_frame, const std::string& ws_frame, tf2_ros::Buffer &tfBuffer, double resolution);
   
   ////////////// Pure abstract methods from BaseMappingManager /////////////
   // MAP ACCESS/MODIFICATION

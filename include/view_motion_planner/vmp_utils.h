@@ -7,13 +7,13 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <rvp_evaluation/compute_cubes.h> // !!!!!!!!!
-#include <view_motion_planner/mapping_manager/base_mapping_manager.h>
 #include <vector>
 #include <visualization_msgs/Marker.h>
 #include <octomap_vpp/RoiOcTree.h>
 #include <Eigen/Dense>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <pcl_conversions/pcl_conversions.h>
+#include <view_motion_planner/mapping_manager/mapping_node.h>
 
 namespace view_motion_planner
 {
@@ -233,7 +233,7 @@ static std::vector<octomath::Vector3> getFibonacciSphereVectors(size_t samples)
  * Returns the given point on failure!
 */
 template<typename PointT>
-PointT transform(const PointT &p, const std::string &from, const std::string &to, const tf2_ros::Buffer &tfBuffer)
+PointT transformToFrame(const PointT &p, const std::string &from, const std::string &to, const tf2_ros::Buffer &tfBuffer)
 {
   if (from == to)
     return p;
@@ -345,60 +345,7 @@ static inline octomap::point3d_collection computeVpRaycastEndpoints(const octoma
   return endpoints;
 }
 
-// TODO
-static inline void computePoseObservedCells(std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells)
-{
-  if (mapping_manager == nullptr)
-  {
-    ROS_FATAL("computePoseObservedCells: mapping_manager is nullptr!");
-    return;
-  }
 
-  octomap::point3d_collection endpoints = computeVpRaycastEndpoints(pose);
-  for (const octomap::point3d &end : endpoints)
-  {
-    MappingKeyRay ray;
-    mapping_manager->computeRayKeys(pose.trans(), end, ray);
-
-    for (const MappingKey& key: ray)
-    {
-      MappingNode node = mapping_manager->search(key);
-      if (!node.isValid()) continue;
-
-      if (node.state == MappingNodeState::UNKNOWN)
-      {
-        unkCells.insert(key);
-      }
-      else if (node.state == MappingNodeState::FREE)
-      {
-        freeCells.insert(key);
-      }
-      else if (node.state == MappingNodeState::NON_ROI || node.state == MappingNodeState::ROI)
-      {
-        occCells.insert(key);
-      }
-    }
-  }
-}
-
-static inline bool computeRayNodes(const std::shared_ptr<BaseMappingManager> &mapping_manager, const octomap::point3d& origin, const octomap::point3d& end, std::vector<MappingNode> &nodes)
-{
-  MappingKeyRay ray;
-  bool res = mapping_manager->computeRayKeys(origin, end, ray);
-  if (!res) return false;
-
-  res = false;
-  for (const MappingKey& key: ray)
-  {
-    MappingNode node = mapping_manager->search(key);
-    if (node.state > MappingNodeState::ERROR)
-    {
-      nodes.push_back(node);
-      res = true;
-    }
-  }
-  return res;
-}
 
 static inline void countNodes(const std::vector<MappingNode> &nodes, int& unknown, int& free, int& non_roi, int& roi)
 {

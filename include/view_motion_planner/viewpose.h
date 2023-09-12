@@ -7,6 +7,7 @@
 #include <octomap/OcTreeKey.h>
 #include <octomap/octomap_types.h>
 
+#include "view_motion_planner/mapping_manager/base_mapping_manager.h"
 #include "view_motion_planner/mapping_manager/mapping_key.h"
 #include "view_motion_planner/vmp_utils.h"
 #include "view_motion_planner/robot_manager.h"
@@ -185,7 +186,7 @@ static inline ViewposePtr sampleRandomViewPose(TargetType type,
     for (size_t i=0; i < 100; i++) 
     {
       end = sampleRandomViewpoint(origin, config.sensor_min_range, config.sensor_max_range, global_random_engine); // TODO: using global random engine
-      if (isInWorkspace(transform(end, map_frame, ws_frame, tfBuffer))) // Point in workspace region
+      if (isInWorkspace(transformToFrame(end, map_frame, ws_frame, tfBuffer))) // Point in workspace region
       {
         found_vp = true;
         break;
@@ -202,7 +203,7 @@ static inline ViewposePtr sampleRandomViewPose(TargetType type,
     for (size_t i=0; i < 100; i++)
     {
       octomap::point3d end_ws = sampleRandomWorkspacePoint(); // uses min/max coordinates of workspace
-      end = transform(end_ws, ws_frame, map_frame, tfBuffer);
+      end = transformToFrame(end_ws, ws_frame, map_frame, tfBuffer);
       if (config.vp_select_type == Vmp_WORKSPACE_RANGE)
       {
         double dist = end.distance(origin);
@@ -245,7 +246,7 @@ static inline ViewposePtr sampleRandomViewPose(TargetType type,
     return nullptr;
   }*/
 
-  vp->state = robot_manager->getPoseRobotState(transform(vp->pose, map_frame, pose_frame, tfBuffer));
+  vp->state = robot_manager->getPoseRobotState(transformToFrame(vp->pose, map_frame, pose_frame, tfBuffer));
   vp->type = type;
 
   if (vp->state == nullptr)

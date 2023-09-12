@@ -35,23 +35,23 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
   if (map_type == "octomap")
   {
     ROS_INFO_STREAM("Using octomap map manager");
-    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
+    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, ws_frame, tfBuffer, tree_resolution));
     //mapping_manager.reset(new OctreeManager(nh, tfBuffer, map_frame, ws_frame, pose_frame, tree_resolution, random_engine, robot_manager, 100, update_planning_tree, initialize_evaluator));
   }
   else if (map_type == "voxblox")
   {
     ROS_INFO_STREAM("Using voxblox map manager");
-    mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, tree_resolution));
+    mapping_manager.reset(new VoxbloxManager(nh, priv_nh_, map_frame, ws_frame, tfBuffer, tree_resolution));
   }
   else if (map_type == "panoptic")
   {
     ROS_INFO_STREAM("Using panoptic map manager");
-    mapping_manager.reset(new PanopticManager(nh, priv_nh_, map_frame, tree_resolution));
+    mapping_manager.reset(new PanopticManager(nh, priv_nh_, map_frame, ws_frame, tfBuffer, tree_resolution));
   }
   else
   {
     ROS_WARN_STREAM("Unknown map type: " << map_type << ", defaulting to octomap");
-    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, tree_resolution));
+    mapping_manager.reset(new OctreeManager(nh, priv_nh_, map_frame, ws_frame, tfBuffer, tree_resolution));
   }
 
   rvp_evaluation::EvaluatorType active_evaluators = rvp_evaluation::EvaluatorType::EXTERNAL_CLUSTER_EVALUATOR;
@@ -65,9 +65,9 @@ ViewMotionPlanner::ViewMotionPlanner(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuf
 
   // TODO: maybe move into the mapping manager
   // visualization topics
-  roi_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_roi", 1, true);
-  expl_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_expl", 1, true);
-  border_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_border", 1, true);
+  //roi_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_roi", 1, true);
+  //expl_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_expl", 1, true);
+  //border_targets_pub = priv_nh_.advertise<sensor_msgs::PointCloud2>("vis_targets_border", 1, true);
 
   // TODO
   workspacePub = nh.advertise<visualization_msgs::Marker>("workspace", 1, true);
@@ -402,7 +402,7 @@ std::optional<Vertex> ViewMotionPlanner::initCameraPoseGraph()
   ViewposePtr cam_vp(new Viewpose());
   cam_vp->state = robot_manager->getCurrentState();
   if (!cam_vp->state) return std::nullopt;
-  cam_vp->pose = transform(robot_manager->getCurrentPose(), pose_frame, map_frame, tfBuffer);
+  cam_vp->pose = transformToFrame(robot_manager->getCurrentPose(), pose_frame, map_frame, tfBuffer);
   Vertex cam_vert = graph_manager->addViewpose(cam_vp);
   return cam_vert;
 }
@@ -502,7 +502,7 @@ bool ViewMotionPlanner::executePath()
       bool success = robot_manager->executeTrajectory(traj);
       moved = true;
       graph_manager->markAsVisited(*next_start_vertex);
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
       if (eval_running)
       {
         ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
@@ -541,14 +541,14 @@ void ViewMotionPlanner::pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam e
   /*bool start_connected = */buildGraph();
 
   if (config.mode < Vmp_PLAN && config.insert_scan_if_not_moved)
-    waitForPointcloudWithRoi();
+    mapping_manager->updateMap();
 
   while (ros::ok() && config.mode >= Vmp_PLAN)
   {
     if (!searchPath() || config.mode < Vmp_PLAN_AND_EXECUTE)
     {
       if (config.insert_scan_if_not_moved)
-        waitForPointcloudWithRoi();
+        mapping_manager->updateMap();
 
       break;
     }
@@ -556,7 +556,7 @@ void ViewMotionPlanner::pathSearcherThread(rvp_evaluation::EvalEpisodeEndParam e
     bool moved = executePath();
 
     if (!moved && config.insert_scan_if_not_moved)
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
 
     // TODO: Rework
     // if ( (ep == rvp_evaluation::EvalEpisodeEndParam::TIME && mapping_manager->getEvalPassedTime() > duration) ||
@@ -581,14 +581,14 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
   /*bool start_connected = */buildGraph();
 
   if (config.mode < Vmp_PLAN && config.insert_scan_if_not_moved)
-    waitForPointcloudWithRoi();
+    mapping_manager->updateMap();
 
   while (ros::ok() && config.mode >= Vmp_PLAN && ros::Time::now() < end_time)
   {
     if (!searchPath())
     {
       if (config.insert_scan_if_not_moved)
-        waitForPointcloudWithRoi();
+        mapping_manager->updateMap();
 
       break; // TODO: make configurable
     }
@@ -599,7 +599,7 @@ void ViewMotionPlanner::pathSearcherThread(const ros::Time &end_time)
     bool moved = executePath();
 
     if (!moved && config.insert_scan_if_not_moved)
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
 
     resumeGraphBuilderThreads();
     if (config.pause_graph_building_on_search)
@@ -638,7 +638,7 @@ void ViewMotionPlanner::exploreNamedPoses()
   for (const std::string &pose : pose_list)
   {
     robot_manager->moveToNamedPose(pose);
-    waitForPointcloudWithRoi();
+    mapping_manager->updateMap();
   }
 }
 
@@ -738,7 +738,7 @@ bool ViewMotionPlanner::trolleyGoNextSegment()
 void ViewMotionPlanner::plannerLoop()
 {    
   ROS_INFO_STREAM("PLANNER LOOP CALLED");
-  waitForPointcloudWithRoi();
+  mapping_manager->updateMap();
   pose_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::poseVisualizeThread, this)));
   publish_map_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::publishMapThread, this)));
   //graph_visualize_thread = boost::move(boost::thread(boost::bind(&ViewMotionPlanner::graphVisualizeThread, this)));
@@ -763,7 +763,7 @@ void ViewMotionPlanner::plannerLoop()
       robot_manager->moveToHomePose();
       mapping_manager->resetMap();
       graph_manager->clear();
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
 
       ROS_ERROR("Disabled evaluation code! Check line %d", __LINE__);
       //mapping_manager->resetEvaluator();
@@ -856,11 +856,11 @@ void ViewMotionPlanner::plannerLoop()
         robot_manager->moveToHomePose();
         mapping_manager->resetMap();
         graph_manager->clear();
-        waitForPointcloudWithRoi();
+        mapping_manager->updateMap();
         //TODO: mapping_manager->resetEvaluator();
         eval_current_episode++;
       }
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
     }
     else if (config.mode >= Vmp_BUILD_GRAPH)
     {
@@ -872,7 +872,7 @@ void ViewMotionPlanner::plannerLoop()
         robot_manager->moveToHomePose();
         mapping_manager->resetMap();
         graph_manager->clear();
-        waitForPointcloudWithRoi();
+        mapping_manager->updateMap();
         //TODO: mapping_manager->resetEvaluator();
         eval_current_episode++;
         if (eval_current_episode >= eval_num_episodes)
@@ -891,7 +891,7 @@ void ViewMotionPlanner::plannerLoop()
     else if (config.mode == Vmp_MAP_ONLY)
     {
       ROS_INFO_STREAM("PLANNER MAPPING");
-      waitForPointcloudWithRoi();
+      mapping_manager->updateMap();
     }
     else
     {
@@ -903,78 +903,6 @@ void ViewMotionPlanner::plannerLoop()
   {
     plannerLoopOnce();
   }*/
-}
-
-void ViewMotionPlanner::waitForPointcloudWithRoi(double max_wait)
-{
-  pointcloud_roi_msgs::PointcloudWithRoiConstPtr msg = ros::topic::waitForMessage<pointcloud_roi_msgs::PointcloudWithRoi>("/detect_roi/results", nh_, ros::Duration(max_wait));
-  if (msg == nullptr)
-  {
-    ROS_WARN("waitForPointcloudWithRoi: ros::topic::waitForMessage failed!");
-    return;
-  }
-
-  geometry_msgs::Transform pc_transform;
-  if (msg->cloud.header.frame_id != map_frame)
-  {
-    try
-    {
-      geometry_msgs::TransformStamped tmp_ = tfBuffer.lookupTransform(map_frame, msg->cloud.header.frame_id, msg->cloud.header.stamp);
-      pc_transform = tmp_.transform;
-    }
-    catch (const tf2::TransformException &e)
-    {
-      ROS_ERROR_STREAM("Couldn't find transform to map frame in registerPointcloudWithRoi: " << e.what());
-      return;
-    }
-  }
-  else
-  {
-    pc_transform.rotation.x = 0.0;
-    pc_transform.rotation.y = 0.0;
-    pc_transform.rotation.z = 0.0;
-    pc_transform.rotation.w = 1.0;
-    pc_transform.rotation.x = 0.0;
-    pc_transform.rotation.y = 0.0;
-    pc_transform.rotation.z = 0.0;
-  }
-  
-  bool result = mapping_manager->registerPointcloudWithRoi(msg, pc_transform);
-  if (result)
-  {
-    octomap::point3d sr_min_ws(config.sr_min_x, config.sr_min_y, config.sr_min_z);
-    octomap::point3d sr_max_ws(config.sr_max_x, config.sr_max_y, config.sr_max_z);
-
-    octomap::point3d sr_min_map = transform(sr_min_ws, ws_frame, map_frame, tfBuffer);
-    octomap::point3d sr_max_map = transform(sr_max_ws, ws_frame, map_frame, tfBuffer);
-
-    mapping_manager->updateTargets(sr_min_map, sr_max_map);
-
-    // Publish targets
-    if (roi_targets_pub.getNumSubscribers() > 0)
-    {
-      auto roi_targets = mapping_manager->getRoiTargets();
-      auto roi_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*roi_targets, map_frame);
-      //auto roi_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*roi_targets, map_frame, 255, 0 , 0); // RED
-      roi_targets_pub.publish(roi_targets_msg);
-    }
-    if (expl_targets_pub.getNumSubscribers() > 0)
-    {
-      auto expl_targets = mapping_manager->getExplTargets();
-      auto expl_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*expl_targets, map_frame);
-      //auto expl_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*expl_targets, map_frame, 0, 255 , 0); // GREEN
-      expl_targets_pub.publish(expl_targets_msg);
-    }
-    if (border_targets_pub.getNumSubscribers() > 0)
-    {
-      auto border_targets = mapping_manager->getBorderTargets();
-      auto border_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZ>(*border_targets, map_frame);
-      //auto border_targets_msg = targetsToPointCloud2Msg<pcl::PointXYZRGB>(*border_targets, map_frame, 0, 0, 255); // BLUE
-      border_targets_pub.publish(border_targets_msg);
-    }
-
-    //need_to_publish_map = need_to_publish_map || result;
-  }
 }
 
 void ViewMotionPlanner::publishMapThread()
