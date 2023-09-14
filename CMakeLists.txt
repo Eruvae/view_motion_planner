@@ -61,6 +61,8 @@ find_package(ompl REQUIRED)
 
 find_package(TBB REQUIRED)
 
+find_package(GUROBI QUIET)
+
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
@@ -186,6 +188,12 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/mapping_manager/voxblox_manager.cpp
   src/mapping_manager/panoptic_manager.cpp
 )
+
+if(${GUROBI_FOUND})
+  set(VIEW_MOTION_PLANNER_SRC_FILES ${VIEW_MOTION_PLANNER_SRC_FILES}
+    src/graph_solving/views_voxels_motion.cpp
+  )
+endif()
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
