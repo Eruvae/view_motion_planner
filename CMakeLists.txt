@@ -184,6 +184,7 @@ set(VIEW_MOTION_PLANNER_SRC_FILES
   src/viewpose_graph.cpp
   src/voxblox_tsdf_server.cpp
   src/mapping_manager/base_mapping_manager.cpp
+  src/mapping_manager/base_mapping_manager_pwr.cpp
   src/mapping_manager/octree_manager.cpp
   src/mapping_manager/voxblox_manager.cpp
   src/mapping_manager/panoptic_manager.cpp

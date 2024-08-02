@@ -3,13 +3,11 @@
 
 #include <string>
 #include <ros/ros.h>
-#include <pointcloud_roi_msgs/PointcloudWithRoi.h>
 #include <geometry_msgs/Transform.h>
 #include <octomap/octomap_types.h> // octomap::point3d, octomap::pose6d
 #include <view_motion_planner/mapping_manager/mapping_key.h>
 #include <view_motion_planner/mapping_manager/mapping_node.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/buffer.h>
 
 // NOTE: Keep this file as simple as possible to prevent tangled implementations
@@ -50,6 +48,8 @@ public:
 //////////////////////////////////////// MAP ACCESS/MODIFICATION //////////////////////////////////////////////
 
   /// @brief Constructor
+  /// @param nh NodeHandle
+  /// @param priv_nh Private NodeHandle
   /// @param map_frame The frame_id of the map
   /// @param ws_frame The frame_id of the workspace
   /// @param tfBuffer tf2_ros::Buffer for tf lookups
@@ -87,18 +87,6 @@ public:
   /// @param key 
   /// @return 
   virtual MappingNode search(const MappingKey& key) = 0;
-
-  /// @brief Registers pointcloud with roi to the current map
-  /// @param msg pointcloud with roi
-  /// @param pc_transform If the transformation is not identity, then this transform is applied to the pointcloud before registering to the map.
-  /// @return True, on success. False, on failure (e.g. pointcloud is outside of the map, no points given, tf error, etc.)
-  virtual bool registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform) = 0;
-
-  virtual void updateMap(double max_wait = 2.0);
-
-  void computePoseObservedCells(const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells);
-
-  bool computeRayNodes(const octomap::point3d& origin, const octomap::point3d& end, std::vector<MappingNode> &nodes);
 
   /// @brief Updates roi, expl, and border targets. These targets can be get via getRoiTargets(), getExplTargets(), and getBorderTargets()
   /// @param sr_min Sampling region min in the mapping frame
@@ -139,6 +127,12 @@ public:
   //         The method is depends on the map type and the results should be used for debugging/visualization purposes.
   //         Published topic must be in the private namespace.
   virtual void publishMap() = 0;
+
+  virtual void updateMap(double max_wait = 2.0) {};
+
+  void computePoseObservedCells(const octomap::pose6d &pose, MappingKeySet &freeCells, MappingKeySet &occCells, MappingKeySet &unkCells);
+
+  bool computeRayNodes(const octomap::point3d& origin, const octomap::point3d& end, std::vector<MappingNode> &nodes);
 
   /// @brief Returns a map provider that can be used for evaluation.
   /// @return If implemented, returns a map provider. Otherwise, returns nullptr.

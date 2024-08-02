@@ -1,7 +1,7 @@
 #ifndef __OCTREE_MAPPING_MANAGER__
 #define __OCTREE_MAPPING_MANAGER__
 //////////////////////////////////////
-#include "base_mapping_manager.h"
+#include "base_mapping_manager_pwr.h"
 #include "octree_type_conversions.h"
 //////////////////////////////////////
 #include <octomap_vpp/RoiOcTree.h>
@@ -11,7 +11,7 @@
 namespace view_motion_planner
 {
 
-class OctreeManager: public BaseMappingManager
+class OctreeManager: public BaseMappingManagerPwr
 {
 private:
   double resolution;

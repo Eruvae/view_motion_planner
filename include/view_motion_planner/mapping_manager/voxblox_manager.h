@@ -1,7 +1,7 @@
 #ifndef __VOXBLOX_MAPPING_MANAGER__
 #define __VOXBLOX_MAPPING_MANAGER__
 //////////////////////////////////////
-#include "base_mapping_manager.h"
+#include "base_mapping_manager_pwr.h"
 #include "voxblox_type_conversions.h"
 //////////////////////////////////////
 #include <octomap_vpp/RoiOcTree.h>
@@ -14,7 +14,7 @@
 namespace view_motion_planner
 {
 
-class VoxbloxManager: public BaseMappingManager
+class VoxbloxManager: public BaseMappingManagerPwr
 {
 private:
   ros::NodeHandle nh;

@@ -34,7 +34,6 @@ public:
   bool computeRayKeys(const octomap::point3d& origin, const octomap::point3d& end, MappingKeyRay& ray);
   bool computeNeighborKeys(const MappingKey& point, MappingKeySet& set, const NeighborConnectivity connectivity);
   MappingNode search(const MappingKey& key);
-  bool registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform);
   void updateTargets(octomap::point3d sr_min, octomap::point3d sr_max, bool update_roi, bool update_expl, bool update_border, NeighborConnectivity neighbor_con);
   TargetVConstPtr getRoiTargets();
   TargetVConstPtr getExplTargets();

@@ -125,7 +125,7 @@ PanopticManager::search(const MappingKey& key)
 }
 
 
-bool 
+/*bool 
 PanopticManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::PointcloudWithRoiConstPtr &msg, const geometry_msgs::Transform& pc_transform)
 {
   ROS_WARN("Not implemented");
@@ -137,7 +137,7 @@ PanopticManager::registerPointcloudWithRoi(const pointcloud_roi_msgs::Pointcloud
   //panoptic_mapping::InputData input_data;
   //panoptic_mapper->processInput(input_data);
   //map_mutex.unlock();
-}
+}*/
 
 
 void 
