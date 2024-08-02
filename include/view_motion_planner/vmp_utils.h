@@ -49,6 +49,7 @@ static inline tf2::Vector3 getPerpVectorStark(const tf2::Vector3 &u)
   bool zm = 1^(xm & ym);
 
   tf2::Vector3 v = u.cross(tf2::Vector3(xm, ym, zm));
+  v.normalize();
   return v;
 }
 
